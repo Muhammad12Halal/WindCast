@@ -1,16 +1,17 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter, Space_Mono } from 'next/font/google'
 import Navbar from './components/Navbar'
 import './globals.css'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const inter = Inter({
+  variable: '--font-inter',
   subsets: ['latin'],
 })
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const spaceMono = Space_Mono({
+  variable: '--font-space-mono',
   subsets: ['latin'],
+  weight: ['400', '700'],
 })
 
 export const metadata: Metadata = {
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#020617',
+  themeColor: '#0a0e27',
 }
 
 export default function RootLayout({
@@ -30,8 +31,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100 antialiased">
+    <html lang="en" className={`${inter.variable} ${spaceMono.variable} h-full`}>
+      <body className="min-h-full flex flex-col bg-background text-foreground antialiased">
         <Navbar />
         <main className="flex-1 w-full px-4 py-8">{children}</main>
       </body>
