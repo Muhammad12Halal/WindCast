@@ -34,6 +34,7 @@
   --font-mono: var(--font-space-mono);
 
   --animate-glow: glow 2.5s ease-in-out infinite;
+  --animate-sway: sway 3s ease-in-out infinite;
 
   --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 24px 0 color-mix(in oklab, var(--color-primary) 45%, transparent);
@@ -46,6 +47,16 @@
   }
   50% {
     opacity: 0.55;
+  }
+}
+
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(8deg);
   }
 }
 
