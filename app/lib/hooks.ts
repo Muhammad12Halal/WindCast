@@ -36,6 +36,10 @@ export function useSites() {
   return { sites, loading, error }
 }
 
+// Ingestion has been observed to lag by up to ~30-60min between batches, so a
+// 5min freshness window was hiding valid readings behind "No recent data".
+const READING_FRESHNESS_MINUTES = 60
+
 export function useLatestReadings() {
   const [readings, setReadings] = useState<Record<string, Reading>>({})
   const [loading, setLoading] = useState(true)
@@ -52,7 +56,7 @@ export function useLatestReadings() {
       const { data, error } = await client
         .from('readings')
         .select('*')
-        .gte('timestamp', new Date(Date.now() - 5 * 60000).toISOString())
+        .gte('timestamp', new Date(Date.now() - READING_FRESHNESS_MINUTES * 60000).toISOString())
         .order('timestamp', { ascending: false })
 
       if (error) setError(describeQueryError('readings', error))
