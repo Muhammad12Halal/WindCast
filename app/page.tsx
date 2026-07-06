@@ -2,7 +2,7 @@
 
 import { Loader2, AlertTriangle } from 'lucide-react'
 import { useSites, useLatestReadings, useAlerts } from './lib/hooks'
-import SiteCard from './components/SiteCard'
+import PremiumWindCard from './components/PremiumWindCard'
 import AlertPanel from './components/AlertPanel'
 
 export default function Home() {
@@ -42,7 +42,7 @@ export default function Home() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sites.map((site) => (
-            <SiteCard key={site.id} site={site} reading={readings[site.site_id]} />
+            <PremiumWindCard key={site.id} site={site} reading={readings[site.site_id]} />
           ))}
         </div>
       )}

@@ -55,10 +55,17 @@ function batteryInfo(voltage: number) {
   return { Icon: BatteryWarning, color: 'text-red-400' }
 }
 
-function signalInfo(strength: number) {
-  if (strength >= 75) return { Icon: SignalHigh, color: 'text-green-400', bar: 'bg-green-400' }
-  if (strength >= 50) return { Icon: SignalMedium, color: 'text-amber-400', bar: 'bg-amber-400' }
-  if (strength >= 25) return { Icon: SignalLow, color: 'text-orange-400', bar: 'bg-orange-400' }
+const SIGNAL_MIN_DBM = -110
+const SIGNAL_MAX_DBM = -50
+
+function signalPercent(dBm: number): number {
+  return Math.min(100, Math.max(0, ((dBm - SIGNAL_MIN_DBM) / (SIGNAL_MAX_DBM - SIGNAL_MIN_DBM)) * 100))
+}
+
+function signalInfo(dBm: number) {
+  if (dBm >= -70) return { Icon: SignalHigh, color: 'text-green-400', bar: 'bg-green-400' }
+  if (dBm >= -85) return { Icon: SignalMedium, color: 'text-amber-400', bar: 'bg-amber-400' }
+  if (dBm >= -100) return { Icon: SignalLow, color: 'text-orange-400', bar: 'bg-orange-400' }
   return { Icon: SignalZero, color: 'text-red-400', bar: 'bg-red-400' }
 }
 
@@ -231,8 +238,8 @@ export default function PremiumWindCard({ site, reading, isLoading = false }: Pr
                     icon={signal.Icon}
                     iconColor={signal.color}
                     label="Signal"
-                    value={`${reading.signal_strength}%`}
-                    percent={reading.signal_strength}
+                    value={`${reading.signal_strength} dBm`}
+                    percent={signalPercent(reading.signal_strength)}
                     barColor={signal.bar}
                   />
                 )}
