@@ -20,7 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Home, label: 'Dashboard', href: '/' },
   { icon: Map, label: 'Map', href: '/#map' },
   { icon: Wind, label: 'Site Monitoring', href: '/#sites' },
-  { icon: Sun, label: 'Solar Monitoring', href: '/#solar' },
+  { icon: Sun, label: 'Power System Health', href: '/#power-system' },
   { icon: Gauge, label: 'Performance Analysis', href: '/#performance' },
   { icon: Database, label: 'History', href: '/history' },
   { icon: Settings, label: 'Reports', href: '/reports' },

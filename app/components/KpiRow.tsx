@@ -66,7 +66,7 @@ function LoadingTile() {
 
 export default function KpiRow({ kpis, overallAccuracyPct, loading = false }: KpiRowProps) {
   const avgWind = useCountUp(kpis.avgWindSpeedKmh ?? 0)
-  const energyToday = useCountUp(kpis.energyTodayWh ?? kpis.liveOutputW)
+  const energyToday = useCountUp(kpis.energyTodayWh ?? 0)
   const batteryHealth = useCountUp(kpis.batteryHealthPct ?? 0)
   const accuracy = useCountUp(overallAccuracyPct ?? 0)
 
@@ -111,9 +111,9 @@ export default function KpiRow({ kpis, overallAccuracyPct, loading = false }: Kp
       />
       <KpiTile
         icon={Zap}
-        label={kpis.energyTodayWh !== null ? 'Energy Today' : 'Live Output'}
-        value={Math.round(energyToday).toLocaleString('en-MY')}
-        sub={kpis.energyTodayWh !== null ? 'Wh generated' : 'W (estimated)'}
+        label="Energy Today"
+        value={kpis.energyTodayWh !== null ? Math.round(energyToday).toLocaleString('en-MY') : '—'}
+        sub={kpis.energyTodayWh !== null ? 'Wh generated' : 'no summary data yet'}
         accent="solar"
       />
       <KpiTile

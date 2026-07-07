@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import axios from 'axios'
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { Navigation, Cloud, CloudRain, Thermometer, Droplets } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cardinalDirection } from '../lib/format'
+import { useWeatherForecast } from '../lib/weather'
 import GlassmorphicCard from './ui/GlassmorphicCard'
 
 interface WeatherForecastWidgetProps {
@@ -14,68 +14,7 @@ interface WeatherForecastWidgetProps {
   timezone?: string
 }
 
-interface ForecastPoint {
-  hourOffset: number
-  time: string
-  windSpeed: number
-  windDirection: number
-  cloudCover: number
-  precipitation: number
-  temperature: number
-  humidity: number
-}
-
-interface ForecastSummary {
-  points: ForecastPoint[]
-  now: ForecastPoint
-  avgCloudCover: number
-  totalPrecipitation: number
-}
-
-const CACHE_TTL_MS = 30 * 60 * 1000
-const REFRESH_INTERVAL_MS = 30 * 60 * 1000
 const AGE_TICK_MS = 30 * 1000
-const FORECAST_HOURS = 24
-
-const forecastCache = new Map<string, { data: ForecastSummary; fetchedAt: number }>()
-
-function cacheKey(latitude: number, longitude: number, timezone: string): string {
-  return `${latitude},${longitude},${timezone}`
-}
-
-function summarize(hourly: {
-  time: string[]
-  wind_speed_10m: number[]
-  wind_direction_10m: number[]
-  cloud_cover: number[]
-  precipitation: number[]
-  temperature_2m: number[]
-  relative_humidity_2m: number[]
-}): ForecastSummary {
-  const now = Date.now()
-  const startIndex = Math.max(0, hourly.time.findIndex((time) => new Date(time).getTime() > now) - 1)
-
-  const points: ForecastPoint[] = []
-  for (let i = 0; i < FORECAST_HOURS; i++) {
-    const index = startIndex + i
-    if (index >= hourly.time.length) break
-    points.push({
-      hourOffset: i,
-      time: hourly.time[index],
-      windSpeed: hourly.wind_speed_10m[index] ?? 0,
-      windDirection: hourly.wind_direction_10m[index] ?? 0,
-      cloudCover: hourly.cloud_cover[index] ?? 0,
-      precipitation: hourly.precipitation[index] ?? 0,
-      temperature: hourly.temperature_2m[index] ?? 0,
-      humidity: hourly.relative_humidity_2m[index] ?? 0,
-    })
-  }
-
-  const avgCloudCover = points.reduce((sum, p) => sum + p.cloudCover, 0) / (points.length || 1)
-  const totalPrecipitation = points.reduce((sum, p) => sum + p.precipitation, 0)
-
-  return { points, now: points[0], avgCloudCover, totalPrecipitation }
-}
 
 function formatAgo(ms: number): string {
   const minutes = Math.floor(ms / 60000)
@@ -111,58 +50,8 @@ export default function WeatherForecastWidget({
   longitude = 102.2381,
   timezone = 'Asia/Kuala_Lumpur',
 }: WeatherForecastWidgetProps) {
-  const [forecast, setForecast] = useState<ForecastSummary | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null)
+  const { forecast, loading, error, lastUpdated } = useWeatherForecast(latitude, longitude, timezone)
   const [now, setNow] = useState<number>(() => Date.now())
-
-  useEffect(() => {
-    let cancelled = false
-    const key = cacheKey(latitude, longitude, timezone)
-
-    const fetchForecast = async () => {
-      const cached = forecastCache.get(key)
-      if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-        setForecast(cached.data)
-        setLastUpdated(cached.fetchedAt)
-        setLoading(false)
-        return
-      }
-
-      try {
-        const response = await axios.get('https://api.open-meteo.com/v1/forecast', {
-          params: {
-            latitude,
-            longitude,
-            hourly: 'wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,temperature_2m,relative_humidity_2m',
-            timezone,
-          },
-        })
-
-        const summary = summarize(response.data.hourly)
-
-        if (cancelled) return
-        const fetchedAt = Date.now()
-        forecastCache.set(key, { data: summary, fetchedAt })
-        setForecast(summary)
-        setLastUpdated(fetchedAt)
-        setError(null)
-      } catch {
-        if (cancelled) return
-        setError('Forecast unavailable')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchForecast()
-    const interval = setInterval(fetchForecast, REFRESH_INTERVAL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [latitude, longitude, timezone])
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), AGE_TICK_MS)

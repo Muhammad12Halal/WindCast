@@ -1,5 +1,5 @@
 import type { DailySummary, Reading, Site } from './supabase'
-import { circularMeanDeg, EST_WATTS_PER_KMH } from './format'
+import { circularMeanDeg } from './format'
 
 export interface GlobalKpis {
   avgWindSpeedKmh: number | null
@@ -7,10 +7,8 @@ export interface GlobalKpis {
   onlineStations: number
   totalStations: number
   batteryHealthPct: number | null
-  /** Wh — from a real daily summary if available, otherwise null (caller falls back to a live estimate). */
+  /** Wh — from a real daily summary aggregation, or null if that table/row isn't available yet. */
   energyTodayWh: number | null
-  /** Rough instantaneous output estimate (W) derived from live wind speed, for use when no daily summary exists. */
-  liveOutputW: number
 }
 
 const BATTERY_HEALTHY_MIN_V = 3.5
@@ -24,7 +22,7 @@ export function computeGlobalKpis(
 
   const avgWindSpeedKmh =
     activeReadings.length > 0
-      ? activeReadings.reduce((sum, r) => sum + r.wind_speed_kmh, 0) / activeReadings.length
+      ? activeReadings.reduce((sum, r) => sum + (r.wind_speed_kmh ?? 0), 0) / activeReadings.length
       : null
 
   const dominantDirectionDeg =
@@ -32,10 +30,8 @@ export function computeGlobalKpis(
 
   const batteryHealthPct =
     activeReadings.length > 0
-      ? (activeReadings.filter((r) => r.battery_voltage >= BATTERY_HEALTHY_MIN_V).length / activeReadings.length) * 100
+      ? (activeReadings.filter((r) => (r.battery_voltage ?? 0) >= BATTERY_HEALTHY_MIN_V).length / activeReadings.length) * 100
       : null
-
-  const liveOutputW = activeReadings.reduce((sum, r) => sum + r.wind_speed_kmh * EST_WATTS_PER_KMH, 0)
 
   return {
     avgWindSpeedKmh,
@@ -43,7 +39,6 @@ export function computeGlobalKpis(
     onlineStations: activeReadings.length,
     totalStations: sites.length,
     batteryHealthPct,
-    energyTodayWh: dailySummary?.total_generation_wh ?? null,
-    liveOutputW,
+    energyTodayWh: dailySummary?.total_energy_generated_wh ?? null,
   }
 }

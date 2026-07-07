@@ -75,7 +75,7 @@ export function alignByTimestamp(
       }
     }
     if (closest && closestGap <= maxGapMs) {
-      points.push({ timestamp: ref.timestamp, reference: ref.wind_speed_kmh, lowCost: closest.wind_speed_kmh })
+      points.push({ timestamp: ref.timestamp, reference: ref.wind_speed_kmh ?? 0, lowCost: closest.wind_speed_kmh ?? 0 })
     }
   }
   return points

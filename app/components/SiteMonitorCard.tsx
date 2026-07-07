@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wind, Compass, BatteryCharging, Signal, Sun, CheckCircle2, TriangleAlert, XCircle } from 'lucide-react'
+import { Wind, Compass, BatteryCharging, Signal, Thermometer, CheckCircle2, TriangleAlert, XCircle, WifiOff } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Site, Reading } from '../lib/supabase'
 import {
@@ -100,7 +100,7 @@ export default function SiteMonitorCard({ site, reading, isLoading = false }: Si
 
   const status = isLoading ? null : STATUS_CONFIG[getStatus(reading)]
   const batteryPct = reading ? computeBatteryPercent(reading.battery_voltage) : 0
-  const hasSolar = reading?.solar_voltage != null
+  const hasTemperature = reading?.temperature_c != null
 
   return (
     <div className="group flex min-h-[300px] flex-col gap-4 rounded-xl border border-surface-border bg-surface-card p-5 transition-all duration-300 hover:-translate-y-1 hover:border-wind/60 hover:shadow-glow-wind">
@@ -131,33 +131,37 @@ export default function SiteMonitorCard({ site, reading, isLoading = false }: Si
       {isLoading ? (
         <LoadingSkeleton />
       ) : !reading ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-slate-600">No recent data</div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-1.5 text-center text-sm text-slate-600">
+          <WifiOff size={22} className="text-critical" />
+          <span>Waiting for telemetry</span>
+          <span className="text-xs text-slate-700">Device offline — no reading in the last hour</span>
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Metric
               icon={Wind}
               label="Wind Speed"
-              value={reading.wind_speed_kmh.toFixed(1)}
+              value={(reading.wind_speed_kmh ?? 0).toFixed(1)}
               unit="km/h"
               valueColor={windSpeedTextClass(reading.wind_speed_kmh)}
             />
             <Metric
               icon={Compass}
               label="Direction"
-              value={`${Math.round(reading.wind_direction_deg)}°`}
+              value={`${Math.round(reading.wind_direction_deg ?? 0)}°`}
               unit={cardinalDirection(reading.wind_direction_deg)}
             />
-            <Metric icon={BatteryCharging} label="Battery" value={reading.battery_voltage.toFixed(1)} unit="V" valueColor={batteryTextClass(reading.battery_voltage)} />
-            {hasSolar ? (
-              <Metric icon={Sun} label="Solar" value={reading.solar_voltage!.toFixed(1)} unit="V" valueColor="text-solar" />
+            <Metric icon={BatteryCharging} label="Battery" value={(reading.battery_voltage ?? 0).toFixed(1)} unit="V" valueColor={batteryTextClass(reading.battery_voltage)} />
+            {hasTemperature ? (
+              <Metric icon={Thermometer} label="Temperature" value={reading.temperature_c!.toFixed(1)} unit="°C" />
             ) : (
               <Metric
                 icon={Signal}
                 label="Signal"
-                value={`${reading.signal_strength}`}
+                value={`${reading.signal_rssi ?? '—'}`}
                 unit="dBm"
-                valueColor={signalTextClass(reading.signal_strength)}
+                valueColor={signalTextClass(reading.signal_rssi)}
               />
             )}
           </div>
@@ -170,13 +174,13 @@ export default function SiteMonitorCard({ site, reading, isLoading = false }: Si
           </div>
 
           <div className="flex flex-1 items-center justify-center py-1">
-            <AnimatedCompass direction={reading.wind_direction_deg} size={72} showLabel={false} />
+            <AnimatedCompass direction={reading.wind_direction_deg ?? 0} size={72} showLabel={false} />
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className={`flex items-center gap-1 ${signalTextClass(reading.signal_strength)}`}>
+            <span className={`flex items-center gap-1 ${signalTextClass(reading.signal_rssi)}`}>
               <Signal size={11} />
-              {reading.signal_strength} dBm
+              {reading.signal_rssi ?? '—'} dBm
             </span>
             <span>Updated {formatTimeAgo(reading.timestamp)}</span>
           </div>

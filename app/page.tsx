@@ -4,12 +4,12 @@ import { useCallback, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import SidebarNav from './components/SidebarNav'
 import Header from './components/Header'
-import AlertBanner from './components/AlertBanner'
+import WeatherAdvisoryBanner from './components/WeatherAdvisoryBanner'
 import KpiRow from './components/KpiRow'
 import WindMonitoringPanel from './components/WindMonitoringPanel'
 import MelakasWindFarmMap from './components/MelakasWindFarmMap'
 import SiteMonitoringGrid from './components/SiteMonitoringGrid'
-import SolarMonitoringSection from './components/SolarMonitoringSection'
+import PowerSystemHealthSection from './components/PowerSystemHealthSection'
 import PerformanceAnalysisPanel from './components/PerformanceAnalysisPanel'
 import WeatherForecastWidget from './components/WeatherForecastWidget'
 import Footer from './components/Footer'
@@ -49,22 +49,22 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <Header
-        onlineCount={kpis.onlineStations}
-        totalCount={kpis.totalStations}
-        lastUpdated={new Date()}
-        systemHealth={systemHealth}
-        onRefresh={handleRefresh}
-      />
-
-      {alerts.length > 0 && (
-        <AlertBanner
-          alerts={alerts}
-          onDismiss={() => {
-            // Optional: handle dismiss
-          }}
+      <div className="relative">
+        <Header
+          onlineCount={kpis.onlineStations}
+          totalCount={kpis.totalStations}
+          lastUpdated={new Date()}
+          systemHealth={systemHealth}
+          onRefresh={handleRefresh}
         />
-      )}
+
+        <WeatherAdvisoryBanner
+          sites={sites}
+          readings={readings}
+          alerts={alerts}
+          className="absolute right-20 top-1/2 z-[60] -translate-y-1/2 sm:right-24 md:right-32"
+        />
+      </div>
 
       <div className="flex flex-1">
         <SidebarNav currentPath={pathname} />
@@ -90,7 +90,7 @@ export default function Dashboard() {
 
           <SiteMonitoringGrid sites={sites} readings={readings} loading={sitesLoading} />
 
-          <SolarMonitoringSection sites={sites} readings={readings} dailySummary={dailySummary} loading={sitesLoading} />
+          <PowerSystemHealthSection sites={sites} readings={readings} dailySummary={dailySummary} loading={sitesLoading} />
 
           <PerformanceAnalysisPanel sites={sites} onOverallAccuracyChange={handleOverallAccuracyChange} />
 

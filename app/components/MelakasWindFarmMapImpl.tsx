@@ -7,7 +7,7 @@ import L from 'leaflet'
 import { Fan } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import type { Site, Reading } from '../lib/supabase'
-import { cardinalDirection, EST_WATTS_PER_KMH, GRID_EMISSION_KG_PER_KWH } from '../lib/format'
+import { cardinalDirection, circularMeanDeg } from '../lib/format'
 
 export interface MelakasWindFarmMapImplProps {
   sites: Site[]
@@ -40,8 +40,8 @@ const STATUS_LABEL: Record<SiteStatus, string> = {
 
 function getSiteStatus(reading: Reading | null): SiteStatus {
   if (!reading) return 'critical'
-  if (reading.battery_voltage < 3.5 || reading.signal_strength < -80) return 'critical'
-  if (reading.battery_voltage < 3.8 || reading.signal_strength < -70) return 'warning'
+  if ((reading.battery_voltage ?? 0) < 3.5 || (reading.signal_rssi ?? -999) < -80) return 'critical'
+  if ((reading.battery_voltage ?? 0) < 3.8 || (reading.signal_rssi ?? -999) < -70) return 'warning'
   return 'healthy'
 }
 
@@ -67,8 +67,10 @@ const TURBINE_ICON_HTML = renderToStaticMarkup(<Fan size={16} strokeWidth={2.25}
 function buildDivIcon(status: SiteStatus, isReference: boolean): L.DivIcon {
   const color = STATUS_COLOR[status]
   const ringColor = isReference ? SENSOR_RING_COLOR.reference : SENSOR_RING_COLOR.lowcost
+  const pulse = status === 'healthy' ? `<div class="wind-marker-pulse" style="background:${color};"></div>` : ''
   return L.divIcon({
     html: `
+      ${pulse}
       <div class="wind-marker-circle" style="background:${color};box-shadow:0 0 0 3px ${ringColor};">${TURBINE_ICON_HTML}</div>
       <div class="wind-marker-arrow"></div>
     `,
@@ -79,7 +81,7 @@ function buildDivIcon(status: SiteStatus, isReference: boolean): L.DivIcon {
 }
 
 type IconKey = `${SiteStatus}-${'reference' | 'lowcost'}`
-let cachedIcons: Partial<Record<IconKey, L.DivIcon>> = {}
+const cachedIcons: Partial<Record<IconKey, L.DivIcon>> = {}
 
 function getDivIcon(status: SiteStatus, isReference: boolean): L.DivIcon {
   const key: IconKey = `${status}-${isReference ? 'reference' : 'lowcost'}`
@@ -131,7 +133,7 @@ function SiteMarker({
       eventHandlers={{ click: () => onClick?.(site.site_id) }}
     >
       <Tooltip direction="top" offset={[0, -MAX_DIAMETER / 2]}>
-        <strong>{site.site_name}</strong> — {reading ? `${windSpeed.toFixed(1)} km/h` : 'No data'}
+        <strong>{site.site_name}</strong> — {reading ? `${windSpeed.toFixed(1)} km/h` : 'Waiting for telemetry'}
       </Tooltip>
       <Popup className="wind-popup" minWidth={200}>
         <div className="text-sm">
@@ -148,12 +150,13 @@ function SiteMarker({
               <li>
                 Direction: {Math.round(direction)}° ({cardinalDirection(direction)})
               </li>
-              <li>Signal: {reading.signal_strength} dBm</li>
-              <li>Battery: {reading.battery_voltage.toFixed(2)} V</li>
+              <li>Battery: {(reading.battery_voltage ?? 0).toFixed(2)} V</li>
+              <li>Signal: {reading.signal_rssi ?? '—'} dBm</li>
+              {reading.temperature_c != null && <li>Temperature: {reading.temperature_c.toFixed(1)}°C</li>}
               <li>Updated: {new Date(reading.timestamp).toLocaleTimeString()}</li>
             </ul>
           ) : (
-            <p className="text-slate-400">No recent data</p>
+            <p className="text-slate-400">Waiting for telemetry — device offline</p>
           )}
         </div>
       </Popup>
@@ -168,14 +171,14 @@ function LiveMetricsOverlay({ sites, readings }: { sites: Site[]; readings: Reco
     return () => clearInterval(interval)
   }, [])
 
-  const { outputWh, statusPct, co2Kg } = useMemo(() => {
+  const { avgWindSpeed, statusPct, dominantDirection } = useMemo(() => {
     const activeReadings = sites.map((site) => readings[site.site_id]).filter((r): r is Reading => Boolean(r))
-    // Rough live-output proxy (not a metered daily total): sums an assumed
-    // small-turbine watt-per-km/h yield across every site currently reporting.
-    const totalWatts = activeReadings.reduce((sum, r) => sum + r.wind_speed_kmh * EST_WATTS_PER_KMH, 0)
+    const avgSpeed = activeReadings.length
+      ? activeReadings.reduce((sum, r) => sum + (r.wind_speed_kmh ?? 0), 0) / activeReadings.length
+      : null
     const pct = sites.length ? Math.round((activeReadings.length / sites.length) * 100) : 0
-    const co2 = (totalWatts / 1000) * GRID_EMISSION_KG_PER_KWH
-    return { outputWh: Math.round(totalWatts), statusPct: pct, co2Kg: Math.round(co2 * 10) / 10 }
+    const direction = activeReadings.length ? circularMeanDeg(activeReadings.map((r) => r.wind_direction_deg)) : null
+    return { avgWindSpeed: avgSpeed, statusPct: pct, dominantDirection: direction }
   }, [sites, readings])
 
   return (
@@ -183,19 +186,23 @@ function LiveMetricsOverlay({ sites, readings }: { sites: Site[]; readings: Reco
       className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-6 rounded-lg border border-white/10 bg-black/60 px-6 py-3 backdrop-blur-sm sm:gap-10"
       style={{ zIndex: 1000 }}
     >
-      <MetricColumn value={outputWh} unit="Wh" label="Daily Output" />
-      <MetricColumn value={statusPct} unit="%" label="Real-time Status" />
-      <MetricColumn value={co2Kg} unit="kg" label="CO₂ Saved" />
+      <MetricColumn value={avgWindSpeed !== null ? avgWindSpeed.toFixed(1) : '—'} unit="km/h" label="Avg Wind Speed" />
+      <MetricColumn value={statusPct} unit="%" label="Stations Reporting" />
+      <MetricColumn
+        value={dominantDirection !== null ? cardinalDirection(dominantDirection) : '—'}
+        unit={dominantDirection !== null ? `${Math.round(dominantDirection)}°` : ''}
+        label="Dominant Direction"
+      />
     </div>
   )
 }
 
-function MetricColumn({ value, unit, label }: { value: number; unit: string; label: string }) {
+function MetricColumn({ value, unit, label }: { value: number | string; unit: string; label: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5 text-center">
       <span className="text-lg font-bold tabular-nums leading-none text-white">
         {value}
-        <span className="ml-0.5 text-xs font-medium text-white/60">{unit}</span>
+        {unit && <span className="ml-0.5 text-xs font-medium text-white/60">{unit}</span>}
       </span>
       <span className="text-[10px] font-medium uppercase tracking-wide text-white/50">{label}</span>
     </div>
@@ -278,6 +285,17 @@ export default function MelakasWindFarmMapImpl({ sites, readings, onSiteClick }:
           transition: transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
           pointer-events: none;
         }
+        .wind-marker-pulse {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: ${MIN_DIAMETER}px;
+          height: ${MIN_DIAMETER}px;
+          border-radius: 9999px;
+          transform: translate(-50%, -50%);
+          animation: pulseRing 2.2s var(--ease-smooth, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
+          pointer-events: none;
+        }
         .melaka-wind-map .leaflet-container {
           background: var(--color-surface-background, #07111f);
           font-family: inherit;
@@ -287,6 +305,9 @@ export default function MelakasWindFarmMapImpl({ sites, readings, onSiteClick }:
           background: var(--color-surface-card, #132238);
           color: #e6edf5;
           box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+        }
+        .melaka-wind-map .leaflet-popup-content-wrapper {
+          animation: fadeIn 220ms var(--ease-smooth, cubic-bezier(0.4, 0, 0.2, 1));
         }
         .melaka-wind-map .leaflet-popup-close-button {
           color: #94a3b8;

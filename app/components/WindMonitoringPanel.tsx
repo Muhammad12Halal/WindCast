@@ -1,6 +1,6 @@
 'use client'
 
-import { Wind, Navigation } from 'lucide-react'
+import { Wind, Navigation, WifiOff } from 'lucide-react'
 import type { Reading, Site } from '../lib/supabase'
 import { cardinalDirection, formatTimeAgo, windSpeedTextClass } from '../lib/format'
 import AnimatedCompass from './ui/AnimatedCompass'
@@ -64,24 +64,26 @@ export default function WindMonitoringPanel({
 
           {leader && leaderReading ? (
             <div className="flex items-center gap-5 border-b border-surface-border pb-5">
-              <AnimatedCompass direction={leaderReading.wind_direction_deg} size={88} showLabel={false} />
+              <AnimatedCompass direction={leaderReading.wind_direction_deg ?? 0} size={88} showLabel={false} />
               <div className="min-w-0">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Strongest Reading</p>
                 <div className="flex items-baseline gap-1.5">
                   <span className={`font-mono text-4xl font-bold tabular-nums leading-none ${windSpeedTextClass(leaderReading.wind_speed_kmh)}`}>
-                    {leaderReading.wind_speed_kmh.toFixed(1)}
+                    {(leaderReading.wind_speed_kmh ?? 0).toFixed(1)}
                   </span>
                   <span className="text-sm text-slate-500">km/h</span>
                 </div>
                 <p className="mt-1 truncate text-sm text-slate-300">{leader.site_name}</p>
                 <p className="text-xs text-slate-500">
-                  {cardinalDirection(leaderReading.wind_direction_deg)} · {Math.round(leaderReading.wind_direction_deg)}°
+                  {cardinalDirection(leaderReading.wind_direction_deg)} · {Math.round(leaderReading.wind_direction_deg ?? 0)}°
                 </p>
               </div>
             </div>
           ) : (
-            <div className="border-b border-surface-border pb-5 text-center text-sm text-slate-600">
-              No live wind data yet
+            <div className="flex flex-col items-center gap-1.5 border-b border-surface-border pb-5 text-center text-sm text-slate-600">
+              <WifiOff size={20} className="text-critical" />
+              Waiting for telemetry
+              <span className="text-xs text-slate-700">Retrying every 10s…</span>
             </div>
           )}
 
