@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${spaceMono.variable} h-full`}>
+    <html lang="en" className={`${inter.variable} ${spaceMono.variable} h-full dark`} style={{ colorScheme: 'dark' }}>
       <body className="min-h-full flex flex-col bg-background text-foreground antialiased">
         <Navbar />
         <main className="flex-1 w-full px-4 py-8">{children}</main>
