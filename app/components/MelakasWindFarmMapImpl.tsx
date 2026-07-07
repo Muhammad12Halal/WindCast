@@ -6,7 +6,7 @@ import { MapContainer, TileLayer, Marker, Popup, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { Fan } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
-import type { Site, Reading } from '../app/lib/supabase'
+import type { Site, Reading } from '../lib/supabase'
 
 export interface MelakasWindFarmMapImplProps {
   sites: Site[]
