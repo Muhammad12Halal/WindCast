@@ -64,3 +64,13 @@ export interface Alert {
   created_at: string
   resolved_at?: string
 }
+
+export interface DailySummary {
+  date: string
+  wind_generation_wh: number
+  solar_generation_wh: number
+  total_generation_wh: number
+  efficiency_score: number
+  peak_hour: number
+  peak_generation_wh: number
+}
