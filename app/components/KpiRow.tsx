@@ -28,25 +28,33 @@ function KpiTile({
   value,
   sub,
   accent,
+  emptyLabel,
 }: {
   icon: LucideIcon
   label: string
-  value: React.ReactNode
+  /** Pass `null` (instead of a "—" placeholder) to render the informative empty state. */
+  value: React.ReactNode | null
   sub?: string
   accent: Accent
+  emptyLabel?: string
 }) {
   const classes = ACCENT_CLASSES[accent]
+  const isEmpty = value === null
   return (
     <div
       className={`group flex items-center gap-3 rounded-xl border border-surface-border bg-surface-card px-4 py-3.5 transition-all duration-300 hover:-translate-y-0.5 ${classes.ring}`}
     >
-      <div className={`shrink-0 rounded-lg p-2 ${classes.chip}`}>
+      <div className={`shrink-0 rounded-lg p-2 transition-opacity duration-300 ${classes.chip} ${isEmpty ? 'opacity-50' : ''}`}>
         <Icon size={18} className={classes.icon} />
       </div>
       <div className="min-w-0">
         <p className="truncate text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="truncate font-mono text-xl font-semibold tabular-nums leading-tight text-slate-100">{value}</p>
-        {sub && <p className="truncate text-[11px] text-slate-500">{sub}</p>}
+        {isEmpty ? (
+          <p className="truncate text-sm font-medium leading-tight text-slate-500">{emptyLabel ?? 'No data'}</p>
+        ) : (
+          <p className="truncate font-mono text-xl font-semibold tabular-nums leading-tight text-slate-100">{value}</p>
+        )}
+        {!isEmpty && sub && <p className="truncate text-[11px] text-slate-500">{sub}</p>}
       </div>
     </div>
   )
@@ -66,7 +74,7 @@ function LoadingTile() {
 
 export default function KpiRow({ kpis, overallAccuracyPct, loading = false }: KpiRowProps) {
   const avgWind = useCountUp(kpis.avgWindSpeedKmh ?? 0)
-  const energyToday = useCountUp(kpis.energyTodayWh ?? kpis.liveOutputW)
+  const energyToday = useCountUp(kpis.energyTodayWh ?? 0)
   const batteryHealth = useCountUp(kpis.batteryHealthPct ?? 0)
   const accuracy = useCountUp(overallAccuracyPct ?? 0)
 
@@ -85,8 +93,9 @@ export default function KpiRow({ kpis, overallAccuracyPct, loading = false }: Kp
       <KpiTile
         icon={Wind}
         label="Avg Wind Speed"
-        value={kpis.avgWindSpeedKmh !== null ? `${avgWind.toFixed(1)}` : '—'}
-        sub={kpis.avgWindSpeedKmh !== null ? 'km/h' : 'no live data'}
+        value={kpis.avgWindSpeedKmh !== null ? `${avgWind.toFixed(1)}` : null}
+        sub="km/h"
+        emptyLabel="Waiting for telemetry"
         accent="wind"
       />
       <KpiTile
@@ -102,18 +111,18 @@ export default function KpiRow({ kpis, overallAccuracyPct, loading = false }: Kp
               />
               {cardinalDirection(kpis.dominantDirectionDeg)}
             </span>
-          ) : (
-            '—'
-          )
+          ) : null
         }
         sub={kpis.dominantDirectionDeg !== null ? `${Math.round(kpis.dominantDirectionDeg)}°` : undefined}
+        emptyLabel="No readings yet"
         accent="wind"
       />
       <KpiTile
         icon={Zap}
-        label={kpis.energyTodayWh !== null ? 'Energy Today' : 'Live Output'}
-        value={Math.round(energyToday).toLocaleString('en-MY')}
-        sub={kpis.energyTodayWh !== null ? 'Wh generated' : 'W (estimated)'}
+        label="Energy Today"
+        value={kpis.energyTodayWh !== null ? Math.round(energyToday).toLocaleString('en-MY') : null}
+        sub="Wh generated"
+        emptyLabel="No summary available"
         accent="solar"
       />
       <KpiTile
@@ -126,15 +135,17 @@ export default function KpiRow({ kpis, overallAccuracyPct, loading = false }: Kp
       <KpiTile
         icon={BatteryCharging}
         label="Battery Health"
-        value={kpis.batteryHealthPct !== null ? `${batteryHealth.toFixed(0)}%` : '—'}
+        value={kpis.batteryHealthPct !== null ? `${batteryHealth.toFixed(0)}%` : null}
         sub="stations ≥ 3.5V"
+        emptyLabel="Collecting data"
         accent="healthy"
       />
       <KpiTile
         icon={Gauge}
         label="Overall Accuracy"
-        value={overallAccuracyPct !== null ? `${accuracy.toFixed(1)}%` : '—'}
-        sub={overallAccuracyPct !== null ? 'low-cost vs. reference' : 'collecting data'}
+        value={overallAccuracyPct !== null ? `${accuracy.toFixed(1)}%` : null}
+        sub="low-cost vs. reference"
+        emptyLabel="Collecting data"
         accent="reference"
       />
     </div>

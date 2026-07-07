@@ -2,9 +2,26 @@
 
 export const CARDINAL_DIRECTIONS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const
 
+const CARDINAL_DIRECTIONS_FULL = [
+  'North',
+  'North-East',
+  'East',
+  'South-East',
+  'South',
+  'South-West',
+  'West',
+  'North-West',
+] as const
+
 export function cardinalDirection(deg: number): string {
   const normalized = ((deg % 360) + 360) % 360
   return CARDINAL_DIRECTIONS[Math.round(normalized / 45) % 8]
+}
+
+/** Spelled-out cardinal name, e.g. "North-West" — used where direction is the visual focus. */
+export function cardinalDirectionFull(deg: number): string {
+  const normalized = ((deg % 360) + 360) % 360
+  return CARDINAL_DIRECTIONS_FULL[Math.round(normalized / 45) % 8]
 }
 
 /** Circular mean of a set of wind-direction degrees (handles the 0/360 wraparound). */
@@ -74,11 +91,6 @@ const BATTERY_MAX_V = 5
 export function batteryPercent(voltage: number): number {
   return Math.min(100, Math.max(0, (voltage / BATTERY_MAX_V) * 100))
 }
-
-// Rough small-turbine live-output proxy (watts per km/h of wind speed), shared
-// across the map overlay and KPI row so the two numbers never disagree.
-export const EST_WATTS_PER_KMH = 12
-export const GRID_EMISSION_KG_PER_KWH = 0.585
 
 // Stations without a dedicated charge-controller reading are inferred from
 // battery voltage alone — labelled distinctly from a real controller status.

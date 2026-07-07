@@ -20,7 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Home, label: 'Dashboard', href: '/' },
   { icon: Map, label: 'Map', href: '/#map' },
   { icon: Wind, label: 'Site Monitoring', href: '/#sites' },
-  { icon: Sun, label: 'Solar Monitoring', href: '/#solar' },
+  { icon: Sun, label: 'Power System Health', href: '/#power-system' },
   { icon: Gauge, label: 'Performance Analysis', href: '/#performance' },
   { icon: Database, label: 'History', href: '/history' },
   { icon: Settings, label: 'Reports', href: '/reports' },
@@ -40,12 +40,26 @@ function NavIcon({ item, active, onClick }: { item: NavItem; active: boolean; on
       aria-label={item.label}
       title={item.label}
       aria-current={active ? 'page' : undefined}
-      className={`group relative flex items-center justify-center rounded-lg p-3 transition-colors duration-200 ${
-        active ? 'text-wind' : 'text-slate-500 hover:text-slate-200'
+      className={`group relative flex items-center justify-center rounded-lg p-3 transition-all duration-200 ease-out hover:-translate-y-0.5 ${
+        active ? 'text-wind' : 'text-slate-500 hover:text-slate-100'
       }`}
     >
-      {active && <span className="absolute inset-0 rounded-lg bg-wind/10" />}
-      <Icon size={22} className="relative" />
+      <span
+        className={`absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-wind transition-opacity duration-200 ${
+          active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'
+        }`}
+        aria-hidden
+      />
+      <span
+        className={`absolute inset-0 rounded-lg transition-all duration-200 ${
+          active ? 'bg-wind/12 shadow-glow-wind' : 'bg-transparent group-hover:bg-surface-border/50'
+        }`}
+        aria-hidden
+      />
+      <Icon size={22} className="relative shrink-0 transition-transform duration-200 group-hover:scale-110" />
+      <span className="pointer-events-none absolute left-full z-10 ml-2 hidden -translate-x-1 whitespace-nowrap rounded-md border border-surface-border bg-surface-card px-2.5 py-1.5 text-xs font-medium text-slate-200 opacity-0 shadow-card transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 md:block">
+        {item.label}
+      </span>
     </Link>
   )
 }

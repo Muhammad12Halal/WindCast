@@ -1,6 +1,6 @@
 'use client'
 
-import { Sun, BatteryCharging, Gauge, Zap, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { Sun, SlidersHorizontal, BatteryCharging, Cpu, Antenna, Cloud, Signal, ShieldCheck, ShieldAlert, WifiOff } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { DailySummary, Reading, Site } from '../lib/supabase'
 import {
@@ -9,9 +9,11 @@ import {
   batteryTextClass,
   chargingStatusFromBattery,
   controllerStatusFromBattery,
+  formatTimeAgo,
+  signalTextClass,
 } from '../lib/format'
 
-export interface SolarMonitoringSectionProps {
+export interface PowerSystemHealthSectionProps {
   sites: Site[]
   readings: Record<string, Reading>
   dailySummary?: DailySummary | null
@@ -22,6 +24,35 @@ const BATTERY_BAR_CLASS: Record<ReturnType<typeof batteryStatus>, string> = {
   healthy: 'bg-healthy',
   warning: 'bg-warning',
   critical: 'bg-critical',
+}
+
+const HARDWARE_CHAIN: { label: string; icon: LucideIcon }[] = [
+  { label: 'Solar Panel', icon: Sun },
+  { label: 'Charge Controller', icon: SlidersHorizontal },
+  { label: 'Battery', icon: BatteryCharging },
+  { label: 'ESP32', icon: Cpu },
+  { label: 'SIM7600', icon: Antenna },
+  { label: 'Cloud', icon: Cloud },
+]
+
+function HardwareChain() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-3 rounded-xl border border-surface-border bg-surface-card px-4 py-4 sm:flex-nowrap sm:gap-x-0">
+      {HARDWARE_CHAIN.map((stage, i) => (
+        <div key={stage.label} className="flex flex-1 items-center gap-1">
+          <div className="flex flex-col items-center gap-1.5 text-center">
+            <div className="rounded-lg bg-solar/10 p-2">
+              <stage.icon size={16} className="text-solar" />
+            </div>
+            <span className="text-[10px] font-medium leading-tight text-slate-400">{stage.label}</span>
+          </div>
+          {i < HARDWARE_CHAIN.length - 1 && (
+            <div className="mx-1 h-px flex-1 bg-gradient-to-r from-surface-border via-surface-border to-transparent sm:mx-2" />
+          )}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function SummaryStat({ icon: Icon, label, value, sub }: { icon: LucideIcon; label: string; value: string; sub?: string }) {
@@ -39,10 +70,10 @@ function SummaryStat({ icon: Icon, label, value, sub }: { icon: LucideIcon; labe
   )
 }
 
-function SolarCard({ site, reading }: { site: Site; reading: Reading | null }) {
+function PowerCard({ site, reading }: { site: Site; reading: Reading | null }) {
   if (!reading) {
     return (
-      <div className="flex min-h-[180px] flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-4">
+      <div className="flex min-h-[190px] flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-4">
         <div className="flex items-start justify-between gap-2">
           <p className="truncate text-sm font-medium text-slate-200">{site.site_name}</p>
           <span
@@ -53,9 +84,10 @@ function SolarCard({ site, reading }: { site: Site; reading: Reading | null }) {
             {site.is_reference ? 'Reference' : 'Low-Cost'}
           </span>
         </div>
-        <div className="flex flex-1 items-center justify-center gap-1.5 text-xs text-slate-600">
-          <ShieldAlert size={13} className="text-critical" />
-          Station offline — no telemetry
+        <div className="flex flex-1 flex-col items-center justify-center gap-1.5 text-xs text-slate-600">
+          <WifiOff size={20} className="text-critical" />
+          Waiting for telemetry
+          <span className="text-[10px] text-slate-700">Device offline</span>
         </div>
       </div>
     )
@@ -67,7 +99,7 @@ function SolarCard({ site, reading }: { site: Site; reading: Reading | null }) {
   const pct = batteryPercent(reading.battery_voltage)
 
   return (
-    <div className="flex min-h-[180px] flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-solar/50 hover:shadow-glow-solar">
+    <div className="flex min-h-[190px] flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-solar/50 hover:shadow-glow-solar">
       <div className="flex items-start justify-between gap-2">
         <p className="truncate text-sm font-medium text-slate-200">{site.site_name}</p>
         <span
@@ -90,12 +122,14 @@ function SolarCard({ site, reading }: { site: Site; reading: Reading | null }) {
           <p className="text-[10px] uppercase tracking-wide text-slate-500">Solar Voltage</p>
         </div>
         <div>
-          <p className="flex items-center justify-center gap-1 font-mono text-lg font-semibold tabular-nums text-solar">
-            <Zap size={13} />
-            {reading.solar_output_w != null ? reading.solar_output_w.toFixed(0) : '—'}
-            {reading.solar_output_w != null && <span className="text-xs font-normal text-slate-500">W</span>}
+          <p
+            className={`flex items-center justify-center gap-1 font-mono text-lg font-semibold tabular-nums ${signalTextClass(reading.signal_strength)}`}
+          >
+            <Signal size={13} />
+            {reading.signal_strength}
+            <span className="text-xs font-normal text-slate-500">dBm</span>
           </p>
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">Solar Output</p>
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Signal Strength</p>
         </div>
       </div>
 
@@ -124,38 +158,38 @@ function SolarCard({ site, reading }: { site: Site; reading: Reading | null }) {
           />
         </div>
       </div>
+
+      <p className="text-right text-[10px] text-slate-600">Updated {formatTimeAgo(reading.timestamp)}</p>
     </div>
   )
 }
 
-export default function SolarMonitoringSection({ sites, readings, dailySummary, loading = false }: SolarMonitoringSectionProps) {
+export default function PowerSystemHealthSection({ sites, readings, dailySummary, loading = false }: PowerSystemHealthSectionProps) {
   return (
-    <section id="solar" className="scroll-mt-24">
+    <section id="power-system" className="scroll-mt-24">
       <div className="mb-4">
-        <h2 className="font-display text-lg font-semibold text-slate-100">Solar Monitoring</h2>
-        <p className="mt-0.5 text-xs text-slate-500">Charging system health across every station</p>
+        <h2 className="font-display text-lg font-semibold text-slate-100">Power System Health</h2>
+        <p className="mt-0.5 text-xs text-slate-500">Solar Panel → Charge Controller → Battery → ESP32 → SIM7600 → Cloud</p>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border border-surface-border bg-surface-card px-5 py-4">
-        {dailySummary ? (
-          <>
-            <SummaryStat icon={Sun} label="Solar Generated Today" value={`${Math.round(dailySummary.solar_generation_wh)}`} sub="Wh" />
-            <SummaryStat icon={Zap} label="Total Generation" value={`${Math.round(dailySummary.total_generation_wh)}`} sub="Wh (wind + solar)" />
-            <SummaryStat icon={Gauge} label="Efficiency Score" value={`${dailySummary.efficiency_score.toFixed(1)}%`} />
-          </>
-        ) : (
-          <p className="text-sm text-slate-500">
-            Daily generation aggregation not available yet — showing live per-station charging telemetry below.
-          </p>
-        )}
+      <div className="mb-4">
+        <HardwareChain />
       </div>
+
+      {dailySummary && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border border-surface-border bg-surface-card px-5 py-4">
+          <SummaryStat icon={Sun} label="Solar Generated Today" value={`${Math.round(dailySummary.solar_generation_wh)}`} sub="Wh" />
+          <SummaryStat icon={BatteryCharging} label="Total Generation" value={`${Math.round(dailySummary.total_generation_wh)}`} sub="Wh (wind + solar)" />
+          <SummaryStat icon={SlidersHorizontal} label="Efficiency Score" value={`${dailySummary.efficiency_score.toFixed(1)}%`} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-[180px] animate-pulse rounded-xl border border-surface-border bg-surface-card" />
+              <div key={i} className="h-[190px] animate-pulse rounded-xl border border-surface-border bg-surface-card" />
             ))
-          : sites.map((site) => <SolarCard key={site.site_id} site={site} reading={readings[site.site_id] ?? null} />)}
+          : sites.map((site) => <PowerCard key={site.site_id} site={site} reading={readings[site.site_id] ?? null} />)}
       </div>
     </section>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wind, Compass, BatteryCharging, Signal, Sun, CheckCircle2, TriangleAlert, XCircle } from 'lucide-react'
+import { Wind, Compass, BatteryCharging, Signal, Thermometer, CheckCircle2, TriangleAlert, WifiOff } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Site, Reading } from '../lib/supabase'
 import {
@@ -21,10 +21,10 @@ interface SiteMonitorCardProps {
   isLoading?: boolean
 }
 
-type SiteStatus = 'HEALTHY' | 'LOW_BATTERY' | 'ERROR'
+type SiteStatus = 'HEALTHY' | 'LOW_BATTERY' | 'OFFLINE'
 
 function getStatus(reading: Reading | null): SiteStatus {
-  if (!reading) return 'ERROR'
+  if (!reading) return 'OFFLINE'
   if (batteryStatus(reading.battery_voltage) === 'critical') return 'LOW_BATTERY'
   return 'HEALTHY'
 }
@@ -32,7 +32,7 @@ function getStatus(reading: Reading | null): SiteStatus {
 const STATUS_CONFIG: Record<SiteStatus, { label: string; icon: LucideIcon; color: string }> = {
   HEALTHY: { label: 'HEALTHY', icon: CheckCircle2, color: 'text-healthy' },
   LOW_BATTERY: { label: 'LOW BATTERY', icon: TriangleAlert, color: 'text-warning' },
-  ERROR: { label: 'ERROR', icon: XCircle, color: 'text-critical' },
+  OFFLINE: { label: 'OFFLINE', icon: WifiOff, color: 'text-slate-500' },
 }
 
 const BATTERY_BAR_CLASS: Record<ReturnType<typeof batteryStatus>, string> = {
@@ -100,7 +100,7 @@ export default function SiteMonitorCard({ site, reading, isLoading = false }: Si
 
   const status = isLoading ? null : STATUS_CONFIG[getStatus(reading)]
   const batteryPct = reading ? computeBatteryPercent(reading.battery_voltage) : 0
-  const hasSolar = reading?.solar_voltage != null
+  const hasTemperature = reading?.temperature_c != null
 
   return (
     <div className="group flex min-h-[300px] flex-col gap-4 rounded-xl border border-surface-border bg-surface-card p-5 transition-all duration-300 hover:-translate-y-1 hover:border-wind/60 hover:shadow-glow-wind">
@@ -130,55 +130,66 @@ export default function SiteMonitorCard({ site, reading, isLoading = false }: Si
 
       {isLoading ? (
         <LoadingSkeleton />
-      ) : !reading ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-slate-600">No recent data</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {!reading && (
+            <p className="-mt-1 text-center text-[11px] text-slate-600">Waiting for telemetry — no reading in the last hour</p>
+          )}
+
+          <div className="grid grid-cols-3 gap-4 sm:grid-cols-5">
             <Metric
               icon={Wind}
               label="Wind Speed"
-              value={reading.wind_speed_kmh.toFixed(1)}
-              unit="km/h"
-              valueColor={windSpeedTextClass(reading.wind_speed_kmh)}
+              value={reading ? reading.wind_speed_kmh.toFixed(1) : '--'}
+              unit={reading ? 'km/h' : undefined}
+              valueColor={reading ? windSpeedTextClass(reading.wind_speed_kmh) : 'text-slate-600'}
             />
             <Metric
               icon={Compass}
               label="Direction"
-              value={`${Math.round(reading.wind_direction_deg)}°`}
-              unit={cardinalDirection(reading.wind_direction_deg)}
+              value={reading ? `${Math.round(reading.wind_direction_deg)}°` : '--'}
+              unit={reading ? cardinalDirection(reading.wind_direction_deg) : undefined}
+              valueColor={reading ? 'text-wind' : 'text-slate-600'}
             />
-            <Metric icon={BatteryCharging} label="Battery" value={reading.battery_voltage.toFixed(1)} unit="V" valueColor={batteryTextClass(reading.battery_voltage)} />
-            {hasSolar ? (
-              <Metric icon={Sun} label="Solar" value={reading.solar_voltage!.toFixed(1)} unit="V" valueColor="text-solar" />
-            ) : (
-              <Metric
-                icon={Signal}
-                label="Signal"
-                value={`${reading.signal_strength}`}
-                unit="dBm"
-                valueColor={signalTextClass(reading.signal_strength)}
-              />
-            )}
+            <Metric
+              icon={BatteryCharging}
+              label="Battery"
+              value={reading ? reading.battery_voltage.toFixed(1) : '--'}
+              unit={reading ? 'V' : undefined}
+              valueColor={reading ? batteryTextClass(reading.battery_voltage) : 'text-slate-600'}
+            />
+            <Metric
+              icon={Signal}
+              label="Signal"
+              value={reading ? `${reading.signal_strength}` : '--'}
+              unit={reading ? 'dBm' : undefined}
+              valueColor={reading ? signalTextClass(reading.signal_strength) : 'text-slate-600'}
+            />
+            <Metric
+              icon={Thermometer}
+              label="Temperature"
+              value={hasTemperature ? reading!.temperature_c!.toFixed(1) : '--'}
+              unit={hasTemperature ? '°C' : undefined}
+              valueColor={hasTemperature ? 'text-slate-100' : 'text-slate-600'}
+            />
           </div>
 
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-border/40">
             <div
-              className={`h-full rounded-full transition-all duration-700 ease-out ${BATTERY_BAR_CLASS[batteryStatus(reading.battery_voltage)]}`}
-              style={{ width: `${batteryPct}%` }}
+              className={`h-full rounded-full transition-all duration-700 ease-out ${reading ? BATTERY_BAR_CLASS[batteryStatus(reading.battery_voltage)] : 'bg-surface-border'}`}
+              style={{ width: `${reading ? batteryPct : 0}%` }}
             />
           </div>
 
           <div className="flex flex-1 items-center justify-center py-1">
-            <AnimatedCompass direction={reading.wind_direction_deg} size={72} showLabel={false} />
+            <AnimatedCompass direction={reading ? reading.wind_direction_deg : null} size={72} showLabel={false} />
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className={`flex items-center gap-1 ${signalTextClass(reading.signal_strength)}`}>
-              <Signal size={11} />
-              {reading.signal_strength} dBm
+            <span className="text-[10px] font-medium uppercase tracking-wide">Last Update</span>
+            <span className={reading ? '' : 'text-slate-600'}>
+              {reading ? formatTimeAgo(reading.timestamp) : 'Waiting for telemetry'}
             </span>
-            <span>Updated {formatTimeAgo(reading.timestamp)}</span>
           </div>
         </>
       )}

@@ -65,10 +65,15 @@ export function useSites() {
 // 5min freshness window was hiding valid readings behind "No recent data".
 const READING_FRESHNESS_MINUTES = 60
 
+/** Polling cadence for `useLatestReadings` — also surfaced in the footer's "Refresh Interval" stat. */
+export const READINGS_POLL_INTERVAL_MS = 10000
+
 export function useLatestReadings() {
   const [readings, setReadings] = useState<Record<string, Reading>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(supabaseConfigError)
+  // Timestamp of the last successful fetch — surfaced in the footer's "Last Refresh" stat.
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
     const client = supabase
@@ -94,6 +99,7 @@ export function useLatestReadings() {
           }
         })
         setReadings(latest)
+        setLastUpdated(new Date())
       }
       setLoading(false)
     }
@@ -106,14 +112,14 @@ export function useLatestReadings() {
       })
       .subscribe()
 
-    const interval = setInterval(fetchLatest, 10000)
+    const interval = setInterval(fetchLatest, READINGS_POLL_INTERVAL_MS)
     return () => {
       subscription.unsubscribe()
       clearInterval(interval)
     }
   }, [])
 
-  return { readings, loading, error }
+  return { readings, loading, error, lastUpdated }
 }
 
 export function useAlerts() {

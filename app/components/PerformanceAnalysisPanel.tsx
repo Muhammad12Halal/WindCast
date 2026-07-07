@@ -1,12 +1,88 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Gauge, Target, TrendingUp, Waves } from 'lucide-react'
+import { ArrowDown, ArrowRight, Gauge, Radio, Target, TrendingUp, TrendingDown, Waves } from 'lucide-react'
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { Site } from '../lib/supabase'
 import { useReadingsSince } from '../lib/hooks'
-import { analyzeSitePairs, pairSites } from '../lib/accuracy'
+import { analyzeSitePairs, computeAccuracyStats, pairSites } from '../lib/accuracy'
 import GlassmorphicCard from './ui/GlassmorphicCard'
+
+const MIN_POINTS_FOR_TREND = 6
+
+function accuracyColor(pct: number): string {
+  if (pct >= 90) return 'text-healthy'
+  if (pct >= 75) return 'text-warning'
+  return 'text-critical'
+}
+
+function rmseColor(v: number): string {
+  if (v <= 2) return 'text-healthy'
+  if (v <= 5) return 'text-warning'
+  return 'text-critical'
+}
+
+function maeColor(v: number): string {
+  if (v <= 1.5) return 'text-healthy'
+  if (v <= 3.5) return 'text-warning'
+  return 'text-critical'
+}
+
+function correlationColor(v: number): string {
+  if (v >= 0.9) return 'text-healthy'
+  if (v >= 0.7) return 'text-warning'
+  return 'text-critical'
+}
+
+function TrendBadge({
+  delta,
+  invert = false,
+  suffix = '',
+  decimals = 1,
+}: {
+  delta: number
+  invert?: boolean
+  suffix?: string
+  decimals?: number
+}) {
+  if (Math.abs(delta) < Math.pow(10, -decimals) / 2) return null
+  const improving = invert ? delta < 0 : delta > 0
+  const Icon = delta > 0 ? TrendingUp : TrendingDown
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${improving ? 'text-healthy' : 'text-critical'}`}>
+      <Icon size={11} />
+      {delta > 0 ? '+' : ''}
+      {delta.toFixed(decimals)}
+      {suffix}
+    </span>
+  )
+}
+
+function PairingIllustration({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-surface-border px-6 py-8 text-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-reference/40 bg-reference/10">
+            <Radio size={18} className="text-reference" />
+          </div>
+          <p className="text-[11px] font-medium text-reference">Reference Station</p>
+        </div>
+        <ArrowDown size={14} className="text-slate-600" />
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-lowcost/40 bg-lowcost/10">
+            <Radio size={18} className="text-lowcost" />
+          </div>
+          <p className="text-[11px] font-medium text-lowcost">Low-Cost Station</p>
+        </div>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-slate-300">{title}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+      </div>
+    </div>
+  )
+}
 
 export interface PerformanceAnalysisPanelProps {
   sites: Site[]
@@ -20,14 +96,31 @@ const WINDOW_OPTIONS = [
   { label: '7 days', hours: 24 * 7 },
 ] as const
 
-function StatTile({ icon: Icon, label, value, sub }: { icon: typeof Gauge; label: string; value: string; sub?: string }) {
+function StatTile({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  valueColor = 'text-slate-100',
+  trend,
+}: {
+  icon: typeof Gauge
+  label: string
+  value: string
+  sub?: string
+  valueColor?: string
+  trend?: React.ReactNode
+}) {
   return (
     <div className="rounded-lg border border-surface-border bg-surface-border/10 px-4 py-3">
-      <div className="flex items-center gap-1.5 text-slate-500">
-        <Icon size={13} />
-        <span className="text-[10px] font-medium uppercase tracking-wide">{label}</span>
+      <div className="flex items-center justify-between gap-1.5 text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <Icon size={13} />
+          <span className="text-[10px] font-medium uppercase tracking-wide">{label}</span>
+        </span>
+        {trend}
       </div>
-      <p className="mt-1 font-mono text-xl font-semibold tabular-nums text-slate-100">{value}</p>
+      <p className={`mt-1 font-mono text-2xl font-bold tabular-nums ${valueColor}`}>{value}</p>
       {sub && <p className="text-[11px] text-slate-500">{sub}</p>}
     </div>
   )
@@ -49,6 +142,23 @@ export default function PerformanceAnalysisPanel({ sites, onOverallAccuracyChang
   }, [analyses, onOverallAccuracyChange])
 
   const activeAnalysis = analyses.find((a) => a.lowCost.site_id === selectedLowCostId) ?? analyses[0]
+
+  // Compares the first half vs. second half of the current window's real aligned
+  // readings — a lightweight trend signal, not a fabricated metric.
+  const trend = useMemo(() => {
+    const points = activeAnalysis?.points ?? []
+    if (points.length < MIN_POINTS_FOR_TREND) return null
+    const mid = Math.floor(points.length / 2)
+    const first = computeAccuracyStats(points.slice(0, mid))
+    const second = computeAccuracyStats(points.slice(mid))
+    if (!first || !second) return null
+    return {
+      accuracyPct: second.accuracyPct - first.accuracyPct,
+      rmse: second.rmse - first.rmse,
+      mae: second.mae - first.mae,
+      correlation: second.correlation - first.correlation,
+    }
+  }, [activeAnalysis])
 
   const chartData = useMemo(
     () =>
@@ -100,9 +210,10 @@ export default function PerformanceAnalysisPanel({ sites, onOverallAccuracyChang
         </div>
 
         {pairs.length === 0 ? (
-          <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-surface-border text-center text-sm text-slate-500">
-            Need at least one reference station and one low-cost station to compute sensor accuracy.
-          </div>
+          <PairingIllustration
+            title="Waiting for paired stations"
+            subtitle="Need at least one reference station and one low-cost station to compute sensor accuracy."
+          />
         ) : !activeAnalysis ? (
           <div className="flex h-40 items-center justify-center text-sm text-slate-500">Loading comparison…</div>
         ) : (
@@ -129,11 +240,16 @@ export default function PerformanceAnalysisPanel({ sites, onOverallAccuracyChang
             </div>
 
             {!activeAnalysis.stats ? (
-              <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-surface-border text-center text-sm text-slate-500">
-                {loading
-                  ? 'Loading readings…'
-                  : `Not enough overlapping readings in this window yet (${activeAnalysis.points.length} found, need 3+).`}
-              </div>
+              loading ? (
+                <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-surface-border text-center text-sm text-slate-500">
+                  Loading readings…
+                </div>
+              ) : (
+                <PairingIllustration
+                  title="Waiting for paired readings"
+                  subtitle={`Need minimum 3 synchronized observations — ${activeAnalysis.points.length} found so far.`}
+                />
+              )
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -142,14 +258,32 @@ export default function PerformanceAnalysisPanel({ sites, onOverallAccuracyChang
                     label="Accuracy"
                     value={`${activeAnalysis.stats.accuracyPct.toFixed(1)}%`}
                     sub={`n=${activeAnalysis.stats.n}`}
+                    valueColor={accuracyColor(activeAnalysis.stats.accuracyPct)}
+                    trend={trend && <TrendBadge delta={trend.accuracyPct} suffix="%" />}
                   />
-                  <StatTile icon={Waves} label="RMSE" value={activeAnalysis.stats.rmse.toFixed(2)} sub="km/h" />
-                  <StatTile icon={Gauge} label="MAE" value={activeAnalysis.stats.mae.toFixed(2)} sub="km/h" />
+                  <StatTile
+                    icon={Waves}
+                    label="RMSE"
+                    value={activeAnalysis.stats.rmse.toFixed(2)}
+                    sub="km/h"
+                    valueColor={rmseColor(activeAnalysis.stats.rmse)}
+                    trend={trend && <TrendBadge delta={trend.rmse} invert />}
+                  />
+                  <StatTile
+                    icon={Gauge}
+                    label="MAE"
+                    value={activeAnalysis.stats.mae.toFixed(2)}
+                    sub="km/h"
+                    valueColor={maeColor(activeAnalysis.stats.mae)}
+                    trend={trend && <TrendBadge delta={trend.mae} invert />}
+                  />
                   <StatTile
                     icon={TrendingUp}
                     label="Correlation"
                     value={activeAnalysis.stats.correlation.toFixed(2)}
                     sub={`bias ${activeAnalysis.stats.bias >= 0 ? '+' : ''}${activeAnalysis.stats.bias.toFixed(2)} km/h`}
+                    valueColor={correlationColor(activeAnalysis.stats.correlation)}
+                    trend={trend && <TrendBadge delta={trend.correlation} decimals={2} />}
                   />
                 </div>
 

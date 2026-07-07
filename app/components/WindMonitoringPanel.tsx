@@ -1,8 +1,8 @@
 'use client'
 
-import { Wind, Navigation } from 'lucide-react'
+import { Wind, Navigation, WifiOff, Radio } from 'lucide-react'
 import type { Reading, Site } from '../lib/supabase'
-import { cardinalDirection, formatTimeAgo, windSpeedTextClass } from '../lib/format'
+import { cardinalDirectionFull, formatTimeAgo, windSpeedTextClass } from '../lib/format'
 import AnimatedCompass from './ui/AnimatedCompass'
 import GlassmorphicCard from './ui/GlassmorphicCard'
 
@@ -62,28 +62,65 @@ export default function WindMonitoringPanel({
             </div>
           </div>
 
-          {leader && leaderReading ? (
-            <div className="flex items-center gap-5 border-b border-surface-border pb-5">
-              <AnimatedCompass direction={leaderReading.wind_direction_deg} size={88} showLabel={false} />
-              <div className="min-w-0">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Strongest Reading</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className={`font-mono text-4xl font-bold tabular-nums leading-none ${windSpeedTextClass(leaderReading.wind_speed_kmh)}`}>
-                    {leaderReading.wind_speed_kmh.toFixed(1)}
-                  </span>
-                  <span className="text-sm text-slate-500">km/h</span>
+          {(() => {
+            const hasLeader = Boolean(leader && leaderReading)
+            return (
+              <div className="flex flex-col gap-4 border-b border-surface-border pb-5">
+                <div className="flex items-center gap-5">
+                  <AnimatedCompass
+                    direction={hasLeader ? leaderReading!.wind_direction_deg : null}
+                    size={96}
+                    premium
+                    showLabel={false}
+                  />
+                  <div className="grid min-w-0 flex-1 grid-cols-2 gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Current Wind</p>
+                      <div className="flex items-baseline gap-1.5">
+                        <span
+                          className={`font-mono text-3xl font-bold tabular-nums leading-none ${
+                            hasLeader ? windSpeedTextClass(leaderReading!.wind_speed_kmh) : 'text-slate-600'
+                          }`}
+                        >
+                          {hasLeader ? leaderReading!.wind_speed_kmh.toFixed(1) : '--'}
+                        </span>
+                        <span className="text-sm text-slate-500">km/h</span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-slate-500">{hasLeader ? leader!.site_name : 'Strongest reading'}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Direction</p>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className={`font-mono text-3xl font-bold tabular-nums leading-none ${hasLeader ? 'text-wind' : 'text-slate-600'}`}>
+                          {hasLeader ? Math.round(leaderReading!.wind_direction_deg) : '--'}
+                        </span>
+                        <span className="text-sm text-slate-500">°</span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-slate-500">
+                        {hasLeader ? cardinalDirectionFull(leaderReading!.wind_direction_deg) : '—'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <p className="mt-1 truncate text-sm text-slate-300">{leader.site_name}</p>
-                <p className="text-xs text-slate-500">
-                  {cardinalDirection(leaderReading.wind_direction_deg)} · {Math.round(leaderReading.wind_direction_deg)}°
-                </p>
+
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Last Update</p>
+                    <p className="mt-0.5 text-xs text-slate-300">
+                      {hasLeader ? formatTimeAgo(leaderReading!.timestamp) : 'Waiting for telemetry'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Status</p>
+                    <p className={`mt-0.5 flex items-center justify-end gap-1 text-xs font-medium ${hasLeader ? 'text-healthy' : 'text-critical'}`}>
+                      {hasLeader ? <Radio size={11} /> : <WifiOff size={11} />}
+                      {hasLeader ? 'Online' : 'Offline'}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="border-b border-surface-border pb-5 text-center text-sm text-slate-600">
-              No live wind data yet
-            </div>
-          )}
+            )
+          })()}
 
           <div className="flex-1 space-y-2 overflow-y-auto">
             {ranked.map((site) => {
