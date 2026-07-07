@@ -3,7 +3,7 @@
 import { Component, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { MapPin } from 'lucide-react'
-import type { Site, Reading } from '../app/lib/supabase'
+import type { Site, Reading } from '../lib/supabase'
 
 export interface MelakasWindFarmMapProps {
   sites: Site[]
