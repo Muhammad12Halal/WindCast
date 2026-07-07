@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Bell,
   CheckCircle2,
@@ -32,6 +33,9 @@ export interface WeatherAdvisoryBannerProps {
   longitude?: number
   timezone?: string
   className?: string
+  isOpen?: boolean
+  onOpenChange?: (open: boolean) => void
+  desktopPortalTargetId?: string
 }
 
 interface SystemIssue {
@@ -66,6 +70,7 @@ type NotificationPriority = 'critical' | 'warning' | 'advisory' | 'information' 
 const MELAKA_LAT = 2.1926
 const MELAKA_LON = 102.2381
 const MELAKA_TZ = 'Asia/Kuala_Lumpur'
+const DESKTOP_BREAKPOINT = '(min-width: 1024px)'
 
 const PRIORITY_ORDER: NotificationPriority[] = ['critical', 'warning', 'advisory', 'information', 'resolved']
 
@@ -246,6 +251,218 @@ function EmptyPanel({ title, copy }: { title: string; copy: string }) {
   )
 }
 
+function NotificationCenterPanel({
+  activeNotificationCount,
+  forecastLoading,
+  activeWeatherCard,
+  stationGroups,
+  resolvedOpen,
+  resolvedNotifications,
+  setResolvedOpen,
+  acknowledgeWeather,
+  acknowledgeGroup,
+  onClose,
+  closeButtonRef,
+  className,
+}: {
+  activeNotificationCount: number
+  forecastLoading: boolean
+  activeWeatherCard: WeatherAdvisoryCard | null
+  stationGroups: StationAlertGroup[]
+  resolvedOpen: boolean
+  resolvedNotifications: ResolvedNotification[]
+  setResolvedOpen: React.Dispatch<React.SetStateAction<boolean>>
+  acknowledgeWeather: (card: WeatherAdvisoryCard) => void
+  acknowledgeGroup: (group: StationAlertGroup) => void
+  onClose: () => void
+  closeButtonRef: React.RefObject<HTMLButtonElement | null>
+  className: string
+}) {
+  return (
+    <aside id="notification-center-panel" aria-label="Notification center" className={className}>
+      <div className="flex items-start justify-between gap-4 border-b border-surface-border px-5 py-5">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Notification Center</p>
+          <h2 className="mt-2 text-xl font-semibold text-slate-50">Operations Advisory Stream</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {activeNotificationCount > 0
+              ? `${activeNotificationCount} active notification${activeNotificationCount === 1 ? '' : 's'} require attention.`
+              : 'All monitoring conditions are currently stable.'}
+          </p>
+        </div>
+
+        <button
+          ref={closeButtonRef}
+          type="button"
+          onClick={onClose}
+          aria-label="Close notifications"
+          className="rounded-xl border border-surface-border bg-surface-card/70 p-2 text-slate-400 transition-colors hover:text-slate-100"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+        <section className="space-y-3">
+          <SectionTitle icon={CloudSun} title="Weather Advisory" subtitle="Forecast-based advisories only. Source: Open-Meteo." />
+
+          {forecastLoading ? (
+            <EmptyPanel title="Loading forecast advisory" copy="Pulling the latest forecast window for Melaka." />
+          ) : activeWeatherCard ? (
+            <NotificationDrawerCard
+              title={activeWeatherCard.title}
+              description={activeWeatherCard.description}
+              priority={derivePriority(activeWeatherCard.level)}
+              icon={LEVEL_ICON[activeWeatherCard.level]}
+              action={
+                <button
+                  type="button"
+                  onClick={() => acknowledgeWeather(activeWeatherCard)}
+                  className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:text-white"
+                >
+                  Acknowledge
+                </button>
+              }
+            >
+              <MetaItem icon={Clock3} label="Expected Time" value={activeWeatherCard.expectedDuration} />
+              <MetaItem icon={Wind} label="Expected Wind" value={activeWeatherCard.forecastWindSpeedRange} />
+              <MetaItem icon={Compass} label="Direction" value={activeWeatherCard.windDirection} />
+              <MetaItem icon={Radio} label="Source" value={activeWeatherCard.source} />
+            </NotificationDrawerCard>
+          ) : (
+            <NotificationDrawerCard
+              title="No Weather Advisory"
+              description="Forecast conditions remain within normal operating bounds for the current horizon."
+              priority="information"
+              icon={CheckCircle2}
+            >
+              <MetaItem icon={Radio} label="Source" value="Open-Meteo" />
+              <MetaItem icon={Clock3} label="Status" value="Monitoring continuously" />
+            </NotificationDrawerCard>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <SectionTitle
+            icon={ShieldAlert}
+            title="System Alerts"
+            subtitle="Grouped by station to keep the dashboard itself clear and scannable."
+          />
+
+          {stationGroups.length > 0 ? (
+            <div className="space-y-3">
+              {stationGroups.map((group) => (
+                <NotificationDrawerCard
+                  key={group.stationName}
+                  title={group.stationName}
+                  description={`${group.issues.length} active issue${group.issues.length === 1 ? '' : 's'} from live telemetry and backend alerts.`}
+                  priority={group.priority}
+                  icon={group.priority === 'critical' ? ShieldAlert : TriangleAlert}
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => acknowledgeGroup(group)}
+                      className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:text-white"
+                    >
+                      Acknowledge
+                    </button>
+                  }
+                >
+                  <div className="sm:col-span-2">
+                    <div className="rounded-xl border border-surface-border bg-background/55 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Active Issues</p>
+                        <PriorityPill priority={group.priority} />
+                      </div>
+                      <ul className="mt-3 space-y-2">
+                        {group.issues.map((issue) => (
+                          <li key={issue.id} className="flex items-start gap-3 rounded-xl border border-surface-border bg-surface-card/50 px-3 py-2.5">
+                            <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${PRIORITY_STYLE[issue.priority].dot}`} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-medium text-slate-100">{issue.title}</p>
+                                <PriorityPill priority={issue.priority} />
+                              </div>
+                              <p className="mt-1 text-sm leading-6 text-slate-400">{issue.description}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <MetaItem icon={Radio} label="Telemetry Source" value={group.issues[0]?.source ?? 'Station Telemetry'} />
+                  <MetaItem
+                    icon={Clock3}
+                    label="Most Recent"
+                    value={group.latestTimestamp ? formatTimeAgo(group.latestTimestamp) : 'Live telemetry'}
+                  />
+                </NotificationDrawerCard>
+              ))}
+            </div>
+          ) : (
+            <EmptyPanel
+              title="No active system alerts"
+              copy="Battery, connectivity, and backend telemetry alerts are currently clear across the monitored stations."
+            />
+          )}
+        </section>
+
+        <section className="space-y-3 border-t border-surface-border pt-4">
+          <button
+            type="button"
+            onClick={() => setResolvedOpen((previous) => !previous)}
+            className="flex w-full items-center justify-between rounded-xl border border-surface-border bg-surface-card/60 px-4 py-3 text-left"
+            aria-expanded={resolvedOpen}
+          >
+            <div>
+              <p className="text-sm font-semibold text-slate-100">Resolved</p>
+              <p className="mt-1 text-xs text-slate-500">Acknowledged notifications are kept here for operator recall.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-surface-border px-2.5 py-1 text-xs font-semibold text-slate-400">
+                {resolvedNotifications.length}
+              </span>
+              {resolvedOpen ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
+            </div>
+          </button>
+
+          {resolvedOpen && (
+            <div className="space-y-3">
+              {resolvedNotifications.length > 0 ? (
+                resolvedNotifications.map((notification) => (
+                  <article key={notification.id} className="rounded-2xl border border-surface-border bg-surface-card/55 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl border border-surface-border bg-background/60 p-2">
+                        <CheckCircle2 size={16} className="text-healthy" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <PriorityPill priority="resolved" />
+                          <PriorityPill priority={notification.priority} />
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-slate-100">{notification.title}</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-400">{notification.description}</p>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {notification.stationName ? <MetaItem icon={MapPin} label="Station" value={notification.stationName} /> : null}
+                          <MetaItem icon={Radio} label="Source" value={notification.source} />
+                          <MetaItem icon={Clock3} label="Resolved" value={formatTimeAgo(notification.timestamp)} />
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <EmptyPanel title="No resolved notifications yet" copy="Acknowledged weather advisories and station issues will appear here." />
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+    </aside>
+  )
+}
+
 export default function WeatherAdvisoryBanner({
   sites,
   readings,
@@ -254,15 +471,49 @@ export default function WeatherAdvisoryBanner({
   longitude = MELAKA_LON,
   timezone = MELAKA_TZ,
   className = '',
+  isOpen: controlledIsOpen,
+  onOpenChange,
+  desktopPortalTargetId,
 }: WeatherAdvisoryBannerProps) {
   const { forecast, loading: forecastLoading } = useWeatherForecast(latitude, longitude, timezone)
-  const [isOpen, setIsOpen] = useState(false)
+  const [internalIsOpen, setInternalIsOpen] = useState(false)
   const [resolvedOpen, setResolvedOpen] = useState(false)
   const [acknowledgedIds, setAcknowledgedIds] = useState<Set<string>>(new Set())
   const [resolvedNotifications, setResolvedNotifications] = useState<ResolvedNotification[]>([])
+  const [isDesktop, setIsDesktop] = useState(false)
+  const [desktopPortalTarget, setDesktopPortalTarget] = useState<HTMLElement | null>(null)
+  const triggerButtonRef = useRef<HTMLButtonElement | null>(null)
+  const mobileCloseButtonRef = useRef<HTMLButtonElement | null>(null)
+  const desktopCloseButtonRef = useRef<HTMLButtonElement | null>(null)
+  const isControlled = controlledIsOpen !== undefined
+  const isOpen = isControlled ? controlledIsOpen : internalIsOpen
+
+  const setIsOpen = (nextOpen: boolean) => {
+    if (!isControlled) setInternalIsOpen(nextOpen)
+    onOpenChange?.(nextOpen)
+  }
 
   useEffect(() => {
-    if (!isOpen) return
+    const mediaQuery = window.matchMedia(DESKTOP_BREAKPOINT)
+    const syncViewport = () => setIsDesktop(mediaQuery.matches)
+
+    syncViewport()
+    mediaQuery.addEventListener('change', syncViewport)
+
+    return () => mediaQuery.removeEventListener('change', syncViewport)
+  }, [])
+
+  useEffect(() => {
+    if (!desktopPortalTargetId) {
+      setDesktopPortalTarget(null)
+      return
+    }
+
+    setDesktopPortalTarget(document.getElementById(desktopPortalTargetId))
+  }, [desktopPortalTargetId, isOpen])
+
+  useEffect(() => {
+    if (!isOpen || isDesktop) return
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -270,7 +521,28 @@ export default function WeatherAdvisoryBanner({
     return () => {
       document.body.style.overflow = previousOverflow
     }
+  }, [isDesktop, isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen) {
+      const focusTarget = isDesktop ? desktopCloseButtonRef.current : mobileCloseButtonRef.current
+      focusTarget?.focus()
+      return
+    }
+
+    triggerButtonRef.current?.focus()
+  }, [isDesktop, isOpen])
 
   const weatherCard = useMemo(() => {
     if (!forecast) return null
@@ -374,13 +646,42 @@ export default function WeatherAdvisoryBanner({
     ])
   }
 
+  const panelProps = {
+    activeNotificationCount,
+    forecastLoading,
+    activeWeatherCard,
+    stationGroups,
+    resolvedOpen,
+    resolvedNotifications,
+    setResolvedOpen,
+    acknowledgeWeather,
+    acknowledgeGroup,
+    onClose: () => setIsOpen(false),
+  }
+
+  const desktopPanel =
+    desktopPortalTarget &&
+    createPortal(
+      <NotificationCenterPanel
+        {...panelProps}
+        closeButtonRef={desktopCloseButtonRef}
+        className={`hidden h-full min-h-0 flex-col bg-background/98 shadow-2xl backdrop-blur-xl lg:flex ${
+          isOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-6 opacity-0'
+        } transition-[opacity,transform] duration-300 ease-out`}
+      />,
+      desktopPortalTarget,
+    )
+
   return (
     <>
       <div className={className}>
         <button
+          ref={triggerButtonRef}
           type="button"
           onClick={() => setIsOpen(true)}
           aria-label={activeNotificationCount > 0 ? `Open notifications. ${activeNotificationCount} active.` : 'Open notifications'}
+          aria-controls="notification-center-panel"
+          aria-expanded={isOpen}
           className="group flex h-11 items-center gap-2 rounded-xl border border-surface-border bg-surface-card/90 px-3 text-slate-200 shadow-card backdrop-blur-md transition-colors hover:border-wind/40 hover:text-white"
         >
           <div className="relative">
@@ -398,202 +699,22 @@ export default function WeatherAdvisoryBanner({
         </button>
       </div>
 
-      <div className={`fixed inset-0 z-[70] ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`} aria-hidden={!isOpen}>
+      {desktopPanel}
+
+      <div className={`fixed inset-0 z-[70] lg:hidden ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`} aria-hidden={!isOpen}>
         <div
           onClick={() => setIsOpen(false)}
           className={`absolute inset-0 bg-slate-950/70 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
         />
 
-        <aside
-          aria-label="Notification center"
-          className={`absolute right-0 top-0 flex h-full w-full flex-col border-l border-surface-border bg-background/98 shadow-2xl backdrop-blur-xl transition-transform duration-300 sm:max-w-[460px] ${
+        <NotificationCenterPanel
+          {...panelProps}
+          closeButtonRef={mobileCloseButtonRef}
+          className={`absolute right-0 top-0 flex h-full w-full max-w-[460px] flex-col border-l border-surface-border bg-background/98 shadow-2xl backdrop-blur-xl transition-transform duration-300 sm:w-[460px] ${
             isOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
-        >
-          <div className="flex items-start justify-between gap-4 border-b border-surface-border px-5 py-5">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Notification Center</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-50">Operations Advisory Stream</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {activeNotificationCount > 0
-                  ? `${activeNotificationCount} active notification${activeNotificationCount === 1 ? '' : 's'} require attention.`
-                  : 'All monitoring conditions are currently stable.'}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              aria-label="Close notifications"
-              className="rounded-xl border border-surface-border bg-surface-card/70 p-2 text-slate-400 transition-colors hover:text-slate-100"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
-            <section className="space-y-3">
-              <SectionTitle
-                icon={CloudSun}
-                title="Weather Advisory"
-                subtitle="Forecast-based advisories only. Source: Open-Meteo."
-              />
-
-              {forecastLoading ? (
-                <EmptyPanel title="Loading forecast advisory" copy="Pulling the latest forecast window for Melaka." />
-              ) : activeWeatherCard ? (
-                <NotificationDrawerCard
-                  title={activeWeatherCard.title}
-                  description={activeWeatherCard.description}
-                  priority={derivePriority(activeWeatherCard.level)}
-                  icon={LEVEL_ICON[activeWeatherCard.level]}
-                  action={
-                    <button
-                      type="button"
-                      onClick={() => acknowledgeWeather(activeWeatherCard)}
-                      className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:text-white"
-                    >
-                      Acknowledge
-                    </button>
-                  }
-                >
-                  <MetaItem icon={Clock3} label="Expected Time" value={activeWeatherCard.expectedDuration} />
-                  <MetaItem icon={Wind} label="Expected Wind" value={activeWeatherCard.forecastWindSpeedRange} />
-                  <MetaItem icon={Compass} label="Direction" value={activeWeatherCard.windDirection} />
-                  <MetaItem icon={Radio} label="Source" value={activeWeatherCard.source} />
-                </NotificationDrawerCard>
-              ) : (
-                <NotificationDrawerCard
-                  title="No Weather Advisory"
-                  description="Forecast conditions remain within normal operating bounds for the current horizon."
-                  priority="information"
-                  icon={CheckCircle2}
-                >
-                  <MetaItem icon={Radio} label="Source" value="Open-Meteo" />
-                  <MetaItem icon={Clock3} label="Status" value="Monitoring continuously" />
-                </NotificationDrawerCard>
-              )}
-            </section>
-
-            <section className="space-y-3">
-              <SectionTitle
-                icon={ShieldAlert}
-                title="System Alerts"
-                subtitle="Grouped by station to keep the dashboard itself clear and scannable."
-              />
-
-              {stationGroups.length > 0 ? (
-                <div className="space-y-3">
-                  {stationGroups.map((group) => (
-                    <NotificationDrawerCard
-                      key={group.stationName}
-                      title={group.stationName}
-                      description={`${group.issues.length} active issue${group.issues.length === 1 ? '' : 's'} from live telemetry and backend alerts.`}
-                      priority={group.priority}
-                      icon={group.priority === 'critical' ? ShieldAlert : TriangleAlert}
-                      action={
-                        <button
-                          type="button"
-                          onClick={() => acknowledgeGroup(group)}
-                          className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:text-white"
-                        >
-                          Acknowledge
-                        </button>
-                      }
-                    >
-                      <div className="sm:col-span-2">
-                        <div className="rounded-xl border border-surface-border bg-background/55 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Active Issues</p>
-                            <PriorityPill priority={group.priority} />
-                          </div>
-                          <ul className="mt-3 space-y-2">
-                            {group.issues.map((issue) => (
-                              <li key={issue.id} className="flex items-start gap-3 rounded-xl border border-surface-border bg-surface-card/50 px-3 py-2.5">
-                                <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${PRIORITY_STYLE[issue.priority].dot}`} />
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-sm font-medium text-slate-100">{issue.title}</p>
-                                    <PriorityPill priority={issue.priority} />
-                                  </div>
-                                  <p className="mt-1 text-sm leading-6 text-slate-400">{issue.description}</p>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-
-                      <MetaItem icon={Radio} label="Telemetry Source" value={group.issues[0]?.source ?? 'Station Telemetry'} />
-                      <MetaItem
-                        icon={Clock3}
-                        label="Most Recent"
-                        value={group.latestTimestamp ? formatTimeAgo(group.latestTimestamp) : 'Live telemetry'}
-                      />
-                    </NotificationDrawerCard>
-                  ))}
-                </div>
-              ) : (
-                <EmptyPanel
-                  title="No active system alerts"
-                  copy="Battery, connectivity, and backend telemetry alerts are currently clear across the monitored stations."
-                />
-              )}
-            </section>
-
-            <section className="space-y-3 border-t border-surface-border pt-4">
-              <button
-                type="button"
-                onClick={() => setResolvedOpen((previous) => !previous)}
-                className="flex w-full items-center justify-between rounded-xl border border-surface-border bg-surface-card/60 px-4 py-3 text-left"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-slate-100">Resolved</p>
-                  <p className="mt-1 text-xs text-slate-500">Acknowledged notifications are kept here for operator recall.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-surface-border px-2.5 py-1 text-xs font-semibold text-slate-400">
-                    {resolvedNotifications.length}
-                  </span>
-                  {resolvedOpen ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
-                </div>
-              </button>
-
-              {resolvedOpen && (
-                <div className="space-y-3">
-                  {resolvedNotifications.length > 0 ? (
-                    resolvedNotifications.map((notification) => (
-                      <article key={notification.id} className="rounded-2xl border border-surface-border bg-surface-card/55 p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="rounded-xl border border-surface-border bg-background/60 p-2">
-                            <CheckCircle2 size={16} className="text-healthy" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <PriorityPill priority="resolved" />
-                              <PriorityPill priority={notification.priority} />
-                            </div>
-                            <p className="mt-2 text-sm font-semibold text-slate-100">{notification.title}</p>
-                            <p className="mt-1 text-sm leading-6 text-slate-400">{notification.description}</p>
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                              {notification.stationName ? <MetaItem icon={MapPin} label="Station" value={notification.stationName} /> : null}
-                              <MetaItem icon={Radio} label="Source" value={notification.source} />
-                              <MetaItem icon={Clock3} label="Resolved" value={formatTimeAgo(notification.timestamp)} />
-                            </div>
-                          </div>
-                        </div>
-                      </article>
-                    ))
-                  ) : (
-                    <EmptyPanel title="No resolved notifications yet" copy="Acknowledged weather advisories and station issues will appear here." />
-                  )}
-                </div>
-              )}
-            </section>
-          </div>
-        </aside>
+        />
       </div>
     </>
   )
 }
-

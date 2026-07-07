@@ -7,7 +7,7 @@ import {
   batteryPercent,
   batteryStatus,
   batteryTextClass,
-  chargingStatusFromBattery,
+  chargingStatusLabel,
   controllerStatusFromBattery,
   formatTimeAgo,
   signalTextClass,
@@ -94,7 +94,7 @@ function PowerCard({ site, reading }: { site: Site; reading: Reading | null }) {
   }
 
   const hasSolarTelemetry = reading.solar_voltage != null
-  const charging = chargingStatusFromBattery(reading.battery_voltage)
+  const charging = chargingStatusLabel(reading.charging_status, reading.battery_voltage)
   const controller = controllerStatusFromBattery(reading.battery_voltage)
   const pct = batteryPercent(reading.battery_voltage)
 

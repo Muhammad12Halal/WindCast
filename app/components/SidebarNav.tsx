@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Home, Map, Sun, Gauge, Database, Settings, Menu, X, Wind } from 'lucide-react'
+import { Home, Map, Sun, Gauge, Menu, X, Wind } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface SidebarNavProps {
@@ -22,8 +22,6 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Wind, label: 'Site Monitoring', href: '/#sites' },
   { icon: Sun, label: 'Power System Health', href: '/#power-system' },
   { icon: Gauge, label: 'Performance Analysis', href: '/#performance' },
-  { icon: Database, label: 'History', href: '/history' },
-  { icon: Settings, label: 'Reports', href: '/reports' },
 ]
 
 function isActive(currentPath: string, href: string): boolean {

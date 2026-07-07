@@ -1,36 +1,28 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatTimeAgo } from '../lib/format'
 
-const REFRESH_INTERVAL_MS = 5000
 const TICK_INTERVAL_MS = 1000
 
-function formatSecondsAgo(seconds: number): string {
-  if (seconds < 1) return 'just now'
-  if (seconds === 1) return '1 second ago'
-  return `${seconds} seconds ago`
+export interface FooterProps {
+  /** Most recent telemetry timestamp across all stations, or null if none has arrived yet. */
+  lastUpdated?: Date | null
 }
 
-export default function Footer() {
-  const [lastUpdated, setLastUpdated] = useState(() => Date.now())
-  const [now, setNow] = useState(() => Date.now())
-
+export default function Footer({ lastUpdated = null }: FooterProps) {
+  // "X ago" needs to keep advancing even though `lastUpdated` itself isn't changing.
+  const [, forceTick] = useState(0)
   useEffect(() => {
-    const refresh = setInterval(() => setLastUpdated(Date.now()), REFRESH_INTERVAL_MS)
-    return () => clearInterval(refresh)
-  }, [])
-
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), TICK_INTERVAL_MS)
+    const tick = setInterval(() => forceTick((n) => n + 1), TICK_INTERVAL_MS)
     return () => clearInterval(tick)
   }, [])
-
-  const secondsAgo = Math.floor((now - lastUpdated) / 1000)
 
   return (
     <footer className="w-full border-t border-surface-border bg-background px-5 py-4 text-center text-xs text-slate-400">
       <p className="text-balance">
-        © 2025 Wind Nowcast Dashboard · Data updates every 5 seconds · Last updated: {formatSecondsAgo(secondsAgo)}
+        © 2025 Wind Nowcast Dashboard ·{' '}
+        {lastUpdated ? `Last telemetry: ${formatTimeAgo(lastUpdated.getTime())}` : 'Waiting for telemetry'}
       </p>
     </footer>
   )

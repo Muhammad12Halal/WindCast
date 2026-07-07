@@ -93,6 +93,19 @@ export function chargingStatusFromBattery(voltage: number | null | undefined): C
   return 'Not Charging'
 }
 
+// Prefers the device's own reported charging_status (real telemetry field)
+// over the battery-voltage heuristic, which is only a fallback for readings
+// that don't report it.
+export function chargingStatusLabel(
+  deviceStatus: 'charging' | 'discharging' | 'idle' | null | undefined,
+  voltage: number | null | undefined,
+): ChargingStatus {
+  if (deviceStatus === 'charging') return 'Charging'
+  if (deviceStatus === 'discharging') return 'Not Charging'
+  if (deviceStatus === 'idle') return 'Trickle'
+  return chargingStatusFromBattery(voltage)
+}
+
 export type ControllerStatus = 'Normal' | 'Fault'
 
 export function controllerStatusFromBattery(voltage: number | null | undefined): ControllerStatus {

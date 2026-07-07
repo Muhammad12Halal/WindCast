@@ -289,8 +289,18 @@ export function useDailySummary() {
     }
 
     fetchSummary()
+    const subscription = client
+      .channel('daily_summary')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_summary' }, () => {
+        fetchSummary()
+      })
+      .subscribe()
+
     const interval = setInterval(fetchSummary, 5 * 60000)
-    return () => clearInterval(interval)
+    return () => {
+      subscription.unsubscribe()
+      clearInterval(interval)
+    }
   }, [])
 
   return { data, loading }
