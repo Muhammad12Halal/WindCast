@@ -1,29 +1,45 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import SidebarNav from './components/SidebarNav'
 import Header from './components/Header'
 import AlertBanner from './components/AlertBanner'
-import SiteDetailsCard from './components/SiteDetailsCard'
+import KpiRow from './components/KpiRow'
+import WindMonitoringPanel from './components/WindMonitoringPanel'
 import MelakasWindFarmMap from './components/MelakasWindFarmMap'
-import EnergyGenerationWidget from './components/EnergyGenerationWidget'
+import SiteMonitoringGrid from './components/SiteMonitoringGrid'
+import SolarMonitoringSection from './components/SolarMonitoringSection'
+import PerformanceAnalysisPanel from './components/PerformanceAnalysisPanel'
 import WeatherForecastWidget from './components/WeatherForecastWidget'
 import Footer from './components/Footer'
-import { useSites, useLatestReadings, useAlerts } from './lib/hooks'
-import type { Site } from './lib/supabase'
+import { useSites, useLatestReadings, useAlerts, useDailySummary } from './lib/hooks'
+import { computeGlobalKpis } from './lib/kpi'
+import type { StatusLevel } from './lib/format'
+
+function deriveSystemHealth(onlineStations: number, totalStations: number, batteryHealthPct: number | null): StatusLevel {
+  if (totalStations === 0) return 'warning'
+  const onlineRatio = onlineStations / totalStations
+  if (onlineRatio < 0.5 || (batteryHealthPct !== null && batteryHealthPct < 50)) return 'critical'
+  if (onlineRatio < 0.9 || (batteryHealthPct !== null && batteryHealthPct < 80)) return 'warning'
+  return 'healthy'
+}
 
 export default function Dashboard() {
   const pathname = usePathname()
   const { sites, loading: sitesLoading } = useSites()
   const { readings } = useLatestReadings()
   const { alerts } = useAlerts()
-  const [selectedSite, setSelectedSite] = useState<Site | undefined>(undefined)
+  const { data: dailySummary } = useDailySummary()
+  const [selectedSiteId, setSelectedSiteId] = useState<string | undefined>(undefined)
   const [, setIsRefreshing] = useState(false)
+  const [overallAccuracy, setOverallAccuracy] = useState<number | null>(null)
 
-  const activeSite = selectedSite ?? sites[0]
+  const handleOverallAccuracyChange = useCallback((pct: number | null) => setOverallAccuracy(pct), [])
 
-  // Handle refresh
+  const kpis = computeGlobalKpis(sites, readings, dailySummary)
+  const systemHealth = deriveSystemHealth(kpis.onlineStations, kpis.totalStations, kpis.batteryHealthPct)
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     // Trigger data refetch (hooks will auto-refresh via subscriptions)
@@ -32,16 +48,15 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900">
-      {/* Sticky Header */}
+    <div className="flex min-h-screen flex-col bg-background">
       <Header
-        siteCount={sites.length}
-        efficiency={92.3}
+        onlineCount={kpis.onlineStations}
+        totalCount={kpis.totalStations}
         lastUpdated={new Date()}
+        systemHealth={systemHealth}
         onRefresh={handleRefresh}
       />
 
-      {/* Alert Banner (conditional) */}
       {alerts.length > 0 && (
         <AlertBanner
           alerts={alerts}
@@ -51,51 +66,38 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Main Content with Sidebar */}
       <div className="flex flex-1">
         <SidebarNav currentPath={pathname} />
 
-        {/* Main Content Area */}
-        <div className="flex-1 space-y-6 px-4 py-6 sm:px-6">
-          {/* Site Details Card + Map */}
-          <div id="map" className="grid scroll-mt-24 grid-cols-1 gap-6 lg:grid-cols-5">
-            {/* LEFT: Site Details (40%) */}
-            <div className="lg:col-span-2">
-              {sitesLoading ? (
-                <SiteDetailsCard site={{} as Site} reading={null} isLoading />
-              ) : activeSite ? (
-                <SiteDetailsCard site={activeSite} reading={readings[activeSite.site_id] || null} />
-              ) : (
-                <div className="flex h-full min-h-[280px] items-center justify-center rounded-xl border border-surface-border bg-surface-card text-sm text-slate-500">
-                  No sites configured
-                </div>
-              )}
-            </div>
+        <div className="flex-1 space-y-8 px-4 py-6 sm:px-6">
+          <KpiRow kpis={kpis} overallAccuracyPct={overallAccuracy} loading={sitesLoading} />
 
-            {/* RIGHT: Map (60%) */}
+          <div id="map" className="grid scroll-mt-24 grid-cols-1 gap-6 lg:grid-cols-5">
             <div className="lg:col-span-3">
-              <MelakasWindFarmMap
+              <WindMonitoringPanel
                 sites={sites}
                 readings={readings}
-                onSiteClick={(siteId) => {
-                  const site = sites.find((s) => s.site_id === siteId)
-                  if (site) setSelectedSite(site)
-                }}
+                loading={sitesLoading}
+                selectedSiteId={selectedSiteId}
+                onSelectSite={setSelectedSiteId}
               />
+            </div>
+
+            <div className="lg:col-span-2">
+              <MelakasWindFarmMap sites={sites} readings={readings} onSiteClick={setSelectedSiteId} />
             </div>
           </div>
 
-          {/* Full Width: Energy Generation */}
-          <div id="energy">
-            <EnergyGenerationWidget data={null} isLoading={false} />
-          </div>
+          <SiteMonitoringGrid sites={sites} readings={readings} loading={sitesLoading} />
 
-          {/* Full Width: Weather Forecast */}
+          <SolarMonitoringSection sites={sites} readings={readings} dailySummary={dailySummary} loading={sitesLoading} />
+
+          <PerformanceAnalysisPanel sites={sites} onOverallAccuracyChange={handleOverallAccuracyChange} />
+
           <WeatherForecastWidget />
         </div>
       </div>
 
-      {/* Footer */}
       <Footer />
     </div>
   )

@@ -17,17 +17,17 @@ const AUTO_HIDE_MS = 10000
 const severityStyles = {
   CRITICAL: {
     icon: ShieldAlert,
-    border: 'border-l-red-500',
-    bg: 'bg-red-500/10',
-    label: 'text-red-400',
-    iconColor: 'text-red-400',
+    border: 'border-l-critical',
+    bg: 'bg-critical/10',
+    label: 'text-critical',
+    iconColor: 'text-critical',
   },
   WARNING: {
     icon: TriangleAlert,
-    border: 'border-l-amber-500',
-    bg: 'bg-amber-500/10',
-    label: 'text-amber-400',
-    iconColor: 'text-amber-400',
+    border: 'border-l-warning',
+    bg: 'bg-warning/10',
+    label: 'text-warning',
+    iconColor: 'text-warning',
   },
 } as const
 

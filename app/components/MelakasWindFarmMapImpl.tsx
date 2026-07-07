@@ -7,6 +7,7 @@ import L from 'leaflet'
 import { Fan } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import type { Site, Reading } from '../lib/supabase'
+import { cardinalDirection, EST_WATTS_PER_KMH, GRID_EMISSION_KG_PER_KWH } from '../lib/format'
 
 export interface MelakasWindFarmMapImplProps {
   sites: Site[]
@@ -21,10 +22,15 @@ const METRICS_REFRESH_MS = 5000
 type SiteStatus = 'healthy' | 'warning' | 'critical'
 
 const STATUS_COLOR: Record<SiteStatus, string> = {
-  healthy: '#4ade80',
-  warning: '#fbbf24',
-  critical: '#f87171',
+  healthy: '#22c55e',
+  warning: '#facc15',
+  critical: '#ef4444',
 }
+
+const SENSOR_RING_COLOR = {
+  reference: '#3b82f6',
+  lowcost: '#a855f7',
+} as const
 
 const STATUS_LABEL: Record<SiteStatus, string> = {
   healthy: 'Healthy',
@@ -56,13 +62,14 @@ function arrowLengthFactor(windSpeedKmh: number): number {
   return Math.min(1, Math.max(0.25, windSpeedKmh / 25))
 }
 
-const TURBINE_ICON_HTML = renderToStaticMarkup(<Fan size={16} strokeWidth={2.25} color="#0a0e27" />)
+const TURBINE_ICON_HTML = renderToStaticMarkup(<Fan size={16} strokeWidth={2.25} color="#07111f" />)
 
-function buildDivIcon(status: SiteStatus): L.DivIcon {
+function buildDivIcon(status: SiteStatus, isReference: boolean): L.DivIcon {
   const color = STATUS_COLOR[status]
+  const ringColor = isReference ? SENSOR_RING_COLOR.reference : SENSOR_RING_COLOR.lowcost
   return L.divIcon({
     html: `
-      <div class="wind-marker-circle" style="background:${color};box-shadow:0 0 0 3px ${color}33;">${TURBINE_ICON_HTML}</div>
+      <div class="wind-marker-circle" style="background:${color};box-shadow:0 0 0 3px ${ringColor};">${TURBINE_ICON_HTML}</div>
       <div class="wind-marker-arrow"></div>
     `,
     className: 'wind-marker-wrapper',
@@ -71,22 +78,15 @@ function buildDivIcon(status: SiteStatus): L.DivIcon {
   })
 }
 
-let cachedIcons: Record<SiteStatus, L.DivIcon> | null = null
+type IconKey = `${SiteStatus}-${'reference' | 'lowcost'}`
+let cachedIcons: Partial<Record<IconKey, L.DivIcon>> = {}
 
-function getDivIcons(): Record<SiteStatus, L.DivIcon> {
-  if (!cachedIcons) {
-    cachedIcons = {
-      healthy: buildDivIcon('healthy'),
-      warning: buildDivIcon('warning'),
-      critical: buildDivIcon('critical'),
-    }
+function getDivIcon(status: SiteStatus, isReference: boolean): L.DivIcon {
+  const key: IconKey = `${status}-${isReference ? 'reference' : 'lowcost'}`
+  if (!cachedIcons[key]) {
+    cachedIcons[key] = buildDivIcon(status, isReference)
   }
-  return cachedIcons
-}
-
-function cardinalDirection(deg: number): string {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
-  return dirs[Math.round((((deg % 360) + 360) % 360) / 45) % 8]
+  return cachedIcons[key]!
 }
 
 function SiteMarker({
@@ -102,7 +102,7 @@ function SiteMarker({
   const status = getSiteStatus(reading)
   const windSpeed = reading?.wind_speed_kmh ?? 0
   const direction = reading?.wind_direction_deg ?? 0
-  const icon = getDivIcons()[status]
+  const icon = getDivIcon(status, site.is_reference)
 
   // Icon HTML is static per status; size/rotation are mutated directly on the
   // marker's DOM node so they can transition smoothly without Leaflet
@@ -161,9 +161,6 @@ function SiteMarker({
   )
 }
 
-const EST_WATTS_PER_KMH = 12
-const GRID_EMISSION_KG_PER_KWH = 0.585
-
 function LiveMetricsOverlay({ sites, readings }: { sites: Site[]; readings: Record<string, Reading> }) {
   const [, forceTick] = useState(0)
   useEffect(() => {
@@ -209,15 +206,27 @@ function Legend() {
   const statuses: SiteStatus[] = ['healthy', 'warning', 'critical']
   return (
     <div
-      className="absolute right-3 top-3 flex flex-col gap-1.5 rounded-lg border border-white/10 bg-black/60 px-3 py-2 backdrop-blur-sm"
+      className="absolute right-3 top-3 flex flex-col gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-sm"
       style={{ zIndex: 1000 }}
     >
-      {statuses.map((status) => (
-        <div key={status} className="flex items-center gap-2 text-[11px] text-white/80">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_COLOR[status] }} />
-          {STATUS_LABEL[status]}
+      <div className="flex flex-col gap-1">
+        {statuses.map((status) => (
+          <div key={status} className="flex items-center gap-2 text-[11px] text-white/80">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_COLOR[status] }} />
+            {STATUS_LABEL[status]}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-1 border-t border-white/10 pt-2">
+        <div className="flex items-center gap-2 text-[11px] text-white/80">
+          <span className="h-2.5 w-2.5 rounded-full ring-2" style={{ background: 'transparent', boxShadow: `0 0 0 2px ${SENSOR_RING_COLOR.reference}` }} />
+          Reference
         </div>
-      ))}
+        <div className="flex items-center gap-2 text-[11px] text-white/80">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ boxShadow: `0 0 0 2px ${SENSOR_RING_COLOR.lowcost}` }} />
+          Low-Cost
+        </div>
+      </div>
     </div>
   )
 }
@@ -263,40 +272,40 @@ export default function MelakasWindFarmMapImpl({ sites, readings, onSiteClick }:
           left: 50%;
           width: 3px;
           height: ${MAX_ARROW_LENGTH}px;
-          background: var(--color-primary, #00d4ff);
+          background: var(--color-wind, #00d4ff);
           transform-origin: top center;
           clip-path: polygon(50% 0%, 100% 25%, 65% 25%, 65% 100%, 35% 100%, 35% 25%, 0% 25%);
           transition: transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
           pointer-events: none;
         }
         .melaka-wind-map .leaflet-container {
-          background: var(--color-surface-background, #0a0e27);
+          background: var(--color-surface-background, #07111f);
           font-family: inherit;
         }
         .melaka-wind-map .leaflet-popup-content-wrapper,
         .melaka-wind-map .leaflet-popup-tip {
-          background: var(--color-surface-card, #1a2847);
-          color: #f1f5f9;
+          background: var(--color-surface-card, #132238);
+          color: #e6edf5;
           box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
         }
         .melaka-wind-map .leaflet-popup-close-button {
           color: #94a3b8;
         }
         .melaka-wind-map .leaflet-tooltip {
-          background: var(--color-surface-card, #1a2847);
-          border: 1px solid var(--color-surface-border, #2d3f5b);
-          color: #f1f5f9;
+          background: var(--color-surface-card, #132238);
+          border: 1px solid var(--color-surface-border, #223349);
+          color: #e6edf5;
         }
         .melaka-wind-map .leaflet-tooltip-top:before {
-          border-top-color: var(--color-surface-border, #2d3f5b);
+          border-top-color: var(--color-surface-border, #223349);
         }
         .melaka-wind-map .leaflet-control-zoom a {
-          background: var(--color-surface-card, #1a2847);
-          color: #f1f5f9;
-          border-color: var(--color-surface-border, #2d3f5b);
+          background: var(--color-surface-card, #132238);
+          color: #e6edf5;
+          border-color: var(--color-surface-border, #223349);
         }
         .melaka-wind-map .leaflet-control-zoom a:hover {
-          background: var(--color-surface-border, #2d3f5b);
+          background: var(--color-surface-border, #223349);
         }
       `}</style>
     </div>

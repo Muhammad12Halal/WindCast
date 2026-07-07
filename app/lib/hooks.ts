@@ -1,5 +1,30 @@
-import { useState, useEffect } from 'react'
-import { supabase, supabaseConfigError, describeQueryError, Reading, Alert, Site } from './supabase'
+import { useState, useEffect, useRef } from 'react'
+import { supabase, supabaseConfigError, describeQueryError, Reading, Alert, Site, DailySummary } from './supabase'
+
+const COUNT_UP_MS = 800
+
+/** Eases a displayed number up (or down) toward `target` whenever it changes. */
+export function useCountUp(target: number, durationMs: number = COUNT_UP_MS): number {
+  const [value, setValue] = useState(target)
+  const previous = useRef(target)
+
+  useEffect(() => {
+    const from = previous.current
+    const start = performance.now()
+    let frame: number
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / durationMs)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setValue(from + (target - from) * eased)
+      if (progress < 1) frame = requestAnimationFrame(tick)
+      else previous.current = target
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [target, durationMs])
+
+  return value
+}
 
 export function useSites() {
   const [sites, setSites] = useState<Site[]>([])
@@ -165,4 +190,82 @@ export function useReadingHistory(siteId: string, hours: number = 24) {
   }, [siteId, hours])
 
   return { data, loading, error }
+}
+
+/** Readings across every site within the last `hours`, used for cross-site sensor-accuracy analysis. */
+export function useReadingsSince(hours: number) {
+  const [data, setData] = useState<Reading[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(supabaseConfigError)
+
+  useEffect(() => {
+    const client = supabase
+    if (!client) {
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    const fetchReadings = async () => {
+      setLoading(true)
+      const since = new Date(Date.now() - hours * 60 * 60000).toISOString()
+      const { data, error } = await client
+        .from('readings')
+        .select('*')
+        .gte('timestamp', since)
+        .order('timestamp', { ascending: true })
+
+      if (cancelled) return
+      if (error) setError(describeQueryError('readings', error))
+      setData(data || [])
+      setLoading(false)
+    }
+
+    fetchReadings()
+    const interval = setInterval(fetchReadings, 60000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [hours])
+
+  return { data, loading, error }
+}
+
+// Table is optional — not every deployment has aggregated daily summaries yet.
+// A missing table degrades to `data: null` rather than surfacing as an error.
+const MISSING_TABLE = '42P01'
+
+export function useDailySummary() {
+  const [data, setData] = useState<DailySummary | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const client = supabase
+    if (!client) {
+      setLoading(false)
+      return
+    }
+
+    const fetchSummary = async () => {
+      const today = new Date().toISOString().slice(0, 10)
+      const { data, error } = await client
+        .from('daily_summary')
+        .select('*')
+        .eq('date', today)
+        .maybeSingle()
+
+      if (error && error.code !== MISSING_TABLE) {
+        describeQueryError('daily_summary', error)
+      }
+      setData(error ? null : data)
+      setLoading(false)
+    }
+
+    fetchSummary()
+    const interval = setInterval(fetchSummary, 5 * 60000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return { data, loading }
 }

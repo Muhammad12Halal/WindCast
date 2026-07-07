@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 
-type GlowColor = 'primary' | 'secondary' | 'accent' | 'none'
+type GlowColor = 'wind' | 'solar' | 'lowcost' | 'reference' | 'none'
 
 interface GlassmorphicCardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode
@@ -9,16 +9,18 @@ interface GlassmorphicCardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const ringGradient: Record<GlowColor, string> = {
-  primary: 'from-primary/70 via-primary/10 to-transparent',
-  secondary: 'from-secondary/70 via-secondary/10 to-transparent',
-  accent: 'from-accent/70 via-accent/10 to-transparent',
+  wind: 'from-wind/70 via-wind/10 to-transparent',
+  solar: 'from-solar/70 via-solar/10 to-transparent',
+  lowcost: 'from-lowcost/70 via-lowcost/10 to-transparent',
+  reference: 'from-reference/70 via-reference/10 to-transparent',
   none: 'from-surface-border via-surface-border/40 to-transparent',
 }
 
 const hoverShadow: Record<GlowColor, string> = {
-  primary: 'hover:shadow-glow',
-  secondary: 'hover:shadow-[0_0_24px_0_rgba(255,107,53,0.45)]',
-  accent: 'hover:shadow-[0_0_24px_0_rgba(168,85,247,0.45)]',
+  wind: 'hover:shadow-glow-wind',
+  solar: 'hover:shadow-glow-solar',
+  lowcost: 'hover:shadow-glow-lowcost',
+  reference: 'hover:shadow-glow-reference',
   none: 'hover:shadow-card',
 }
 

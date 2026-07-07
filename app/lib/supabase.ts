@@ -53,6 +53,11 @@ export interface Reading {
   wind_direction_deg: number
   signal_strength: number
   battery_voltage: number
+  // Optional solar/environmental telemetry — not all stations report these yet.
+  solar_voltage?: number | null
+  solar_output_w?: number | null
+  temperature_c?: number | null
+  humidity_pct?: number | null
 }
 
 export interface Alert {

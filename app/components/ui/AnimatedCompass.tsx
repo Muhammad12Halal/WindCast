@@ -1,4 +1,5 @@
 import { Navigation } from 'lucide-react'
+import { cardinalDirection } from '../../lib/format'
 
 interface AnimatedCompassProps {
   /** Wind direction in degrees (0-360, 0 = North). */
@@ -6,13 +7,6 @@ interface AnimatedCompassProps {
   size?: number
   showLabel?: boolean
   className?: string
-}
-
-const CARDINAL_DIRECTIONS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
-
-function cardinalDirection(deg: number): string {
-  const normalized = ((deg % 360) + 360) % 360
-  return CARDINAL_DIRECTIONS[Math.round(normalized / 45) % 8]
 }
 
 export default function AnimatedCompass({
@@ -34,7 +28,7 @@ export default function AnimatedCompass({
         <Navigation
           size={size * 0.375}
           strokeWidth={2.25}
-          className="text-primary transition-transform duration-700 ease-out"
+          className="text-wind transition-transform duration-700 ease-out"
           style={{ transform: `rotate(${direction}deg)` }}
         />
       </div>

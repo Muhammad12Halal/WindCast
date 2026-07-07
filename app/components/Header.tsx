@@ -1,15 +1,19 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wind, RefreshCw } from 'lucide-react'
+import { Wind, RefreshCw, CheckCircle2, TriangleAlert, ShieldAlert } from 'lucide-react'
+import type { StatusLevel } from '../lib/format'
+import { STATUS_COLOR } from '../lib/format'
 
 export interface HeaderProps {
-  /** Number of active sites, shown in the tagline and stats row. */
-  siteCount?: number
-  /** Percentage (0-100) of sites currently reporting fresh data. */
-  efficiency?: number
+  /** Number of stations currently reporting fresh data. */
+  onlineCount?: number
+  /** Total configured stations. */
+  totalCount?: number
   /** Timestamp of the most recent successful data fetch. */
   lastUpdated?: Date | null
+  /** Overall system health, derived from station uptime and battery status. */
+  systemHealth?: StatusLevel
   /** Called when the refresh button is clicked. Awaited so the spinner keeps spinning until it resolves. */
   onRefresh?: () => void | Promise<void>
   className?: string
@@ -24,6 +28,12 @@ function formatTimeAgo(date: Date): string {
   return `${hours}h ago`
 }
 
+const HEALTH_CONFIG: Record<StatusLevel, { label: string; icon: typeof CheckCircle2 }> = {
+  healthy: { label: 'All Systems Normal', icon: CheckCircle2 },
+  warning: { label: 'Degraded Performance', icon: TriangleAlert },
+  critical: { label: 'System Attention Needed', icon: ShieldAlert },
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-right">
@@ -34,9 +44,10 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default function Header({
-  siteCount = 0,
-  efficiency,
+  onlineCount = 0,
+  totalCount = 0,
   lastUpdated = null,
+  systemHealth = 'healthy',
   onRefresh,
   className = '',
 }: HeaderProps) {
@@ -59,21 +70,30 @@ export default function Header({
     }
   }
 
+  const health = HEALTH_CONFIG[systemHealth]
+  const HealthIcon = health.icon
+
   return (
     <header
-      className={`sticky top-0 z-50 flex h-20 animate-fade-in items-center justify-between gap-4 border-b border-surface-border bg-background px-5 ${className}`}
+      className={`sticky top-0 z-50 flex h-20 animate-fade-in items-center justify-between gap-4 border-b border-surface-border bg-background/95 px-5 backdrop-blur-sm ${className}`}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <Wind className="text-primary animate-sway shrink-0" size={28} />
+        <div className="relative shrink-0 rounded-xl bg-wind/10 p-2">
+          <Wind className="text-wind animate-sway" size={24} />
+        </div>
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-bold text-slate-100">Wind Nowcast - Melaka State</h1>
-          <p className="truncate text-xs text-slate-500">Real-time wind monitoring across {siteCount} sites</p>
+          <h1 className="truncate font-display text-lg font-semibold tracking-tight text-slate-100">
+            Wind Profile Nowcasting <span className="font-normal text-slate-500">— Melaka State</span>
+          </h1>
+          <div className="mt-0.5 flex items-center gap-1.5 text-xs" style={{ color: STATUS_COLOR[systemHealth] }}>
+            <HealthIcon size={12} />
+            <span className="font-medium">{health.label}</span>
+          </div>
         </div>
       </div>
 
       <div className="hidden items-center gap-6 md:flex">
-        <Stat label="Active Sites" value={String(siteCount)} />
-        <Stat label="Efficiency" value={efficiency !== undefined ? `${efficiency.toFixed(1)}%` : '—'} />
+        <Stat label="Active Stations" value={`${onlineCount}/${totalCount}`} />
         <Stat label="Last Updated" value={lastUpdated ? formatTimeAgo(lastUpdated) : '—'} />
       </div>
 
@@ -82,7 +102,7 @@ export default function Header({
         onClick={handleRefresh}
         disabled={isRefreshing}
         aria-label="Refresh data"
-        className="glass glass-border flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+        className="glass glass-border flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:text-wind disabled:cursor-not-allowed disabled:opacity-60"
       >
         <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
         <span className="hidden sm:inline">Refresh</span>

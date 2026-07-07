@@ -1,16 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0e27;
-  --foreground: #f1f5f9;
+  --background: #07111f;
+  --foreground: #e6edf5;
 
-  /* Palette */
-  --color-primary: #00d4ff;
-  --color-secondary: #ff6b35;
-  --color-accent: #a855f7;
-  --color-surface-background: #0a0e27;
-  --color-surface-card: #1a2847;
-  --color-surface-border: #2d3f5b;
+  /* Palette — Wind Profile Nowcasting System */
+  --color-wind: #00d4ff;
+  --color-solar: #f59e0b;
+  --color-healthy: #22c55e;
+  --color-warning: #facc15;
+  --color-critical: #ef4444;
+  --color-lowcost: #a855f7;
+  --color-reference: #3b82f6;
+
+  --color-surface-background: #07111f;
+  --color-surface-card: #132238;
+  --color-surface-border: #223349;
+  --color-surface-raised: #1a2c47;
 
   /* Motion */
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
@@ -23,22 +29,33 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  --color-primary: var(--color-primary);
-  --color-secondary: var(--color-secondary);
-  --color-accent: var(--color-accent);
+  --color-wind: var(--color-wind);
+  --color-solar: var(--color-solar);
+  --color-healthy: var(--color-healthy);
+  --color-warning: var(--color-warning);
+  --color-critical: var(--color-critical);
+  --color-lowcost: var(--color-lowcost);
+  --color-reference: var(--color-reference);
+
   --color-surface-background: var(--color-surface-background);
   --color-surface-card: var(--color-surface-card);
   --color-surface-border: var(--color-surface-border);
+  --color-surface-raised: var(--color-surface-raised);
 
   --font-sans: var(--font-inter);
-  --font-mono: var(--font-space-mono);
+  --font-display: var(--font-space-grotesk);
+  --font-mono: var(--font-jetbrains-mono);
 
   --animate-glow: glow 2.5s ease-in-out infinite;
   --animate-sway: sway 3s ease-in-out infinite;
   --animate-fade-in: fadeIn 0.4s var(--ease-smooth);
+  --animate-pulse-ring: pulseRing 2s var(--ease-smooth) infinite;
 
   --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 24px 0 color-mix(in oklab, var(--color-primary) 45%, transparent);
+  --shadow-glow-wind: 0 0 24px 0 color-mix(in oklab, var(--color-wind) 45%, transparent);
+  --shadow-glow-solar: 0 0 24px 0 color-mix(in oklab, var(--color-solar) 45%, transparent);
+  --shadow-glow-lowcost: 0 0 24px 0 color-mix(in oklab, var(--color-lowcost) 45%, transparent);
+  --shadow-glow-reference: 0 0 24px 0 color-mix(in oklab, var(--color-reference) 45%, transparent);
 }
 
 @keyframes glow {
@@ -69,6 +86,21 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  70% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
   }
 }
 
@@ -112,7 +144,12 @@ textarea,
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-primary);
+  background-color: var(--color-wind);
+}
+
+/* Tabular numbers by default for metric displays */
+.font-mono {
+  font-feature-settings: 'tnum' 1, 'zero' 1;
 }
 
 /* Glassmorphism utilities, available as Tailwind classes: glass, glass-border, glass-glow */
@@ -128,6 +165,6 @@ textarea,
 
 @utility glass-glow {
   box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--color-primary) 15%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--color-wind) 15%, transparent),
     0 8px 32px 0 color-mix(in oklab, black 40%, transparent);
 }
